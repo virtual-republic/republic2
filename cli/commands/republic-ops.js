@@ -14,6 +14,8 @@ import { citizens, active, citizen, entities, entity, offices, holderOf } from '
 import { state, accounts, mayActFor, TREASURY } from '../../core/value.js';
 import { writeAct, settle as runSettle, actMessage } from '../../core/acts.js';
 import { corpus, frontmatter } from '../../core/corpus.js';
+import { tally, closesAt } from '../../core/tally.js';
+import { classOf } from '../../core/config.js';
 import { classify } from '../../core/rules.js';
 import { sha256 } from '../../core/hash.js';
 
@@ -515,7 +517,7 @@ the open. The ledger only grows, so a conflict means both sides are real records
 export const gate = {
   group: 'Integrity',
   summary: 'what a change requires, and whether it has it',
-  help: `  republic gate [--base origin/main] [--measure P-0002] [--after-the-fact]
+  help: `  republic gate [--base origin/main] [--measure P-0002] [--approvers a,b] [--after-the-fact]
 
 art-08/§7 — a change to the tools, the settings or the procedure is a measure of
 the class the settings fix for it. This says which, and whether that measure
@@ -545,10 +547,57 @@ carried. --after-the-fact judges what has already landed.`,
     if (!m) return fail([`${id} is not among the measures.`]);
     if (m.class !== need) return fail([`${id} is of class "${m.class}", but this requires "${need}".`, 'A measure cannot enact more than the class it was voted under.']);
 
-    const rf = path.join(at(root, 'ballots'), id, '_result.json');
-    if (!fs.existsSync(rf)) return fail([`${id} has not been counted.`]);
-    const r = JSON.parse(fs.readFileSync(rf, 'utf8'));
-    if (!r.carried) return fail([`${id} ${r.open ? 'is still open' : 'did not carry'}. art-08/§5/¶1 — a measure that carries is enacted; this one has not.`]);
+    // art-08/§4/¶5 — the tally is performed by the published tool, and the
+    // tool's result is the result. So COUNT, rather than believe a file.
+    //
+    // ballots/ is exempt from the gate, because recording a vote cannot itself
+    // require a vote. That means a pull request could carry both a change to the
+    // law and a _result.json saying it carried. Reading that file would let a
+    // measure nobody voted on enact anything. Counting the signed ballots
+    // instead closes it: a ballot not verified against a registered key is not
+    // counted (art-08/§3/¶2), and forging one means forging a signature.
+    const dir = path.join(at(root, 'ballots'), id);
+    const ballots = {};
+    if (fs.existsSync(dir)) {
+      for (const f of fs.readdirSync(dir)) {
+        if (!f.endsWith('.json') || f.startsWith('_')) continue;
+        try { ballots[path.basename(f, '.json')] = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); } catch {}
+      }
+    }
+    if (!Object.keys(ballots).length) return fail([`${id} has no ballots. Nothing has been voted on.`]);
+
+    const mSpec = classOf(root, m.class);
+    const r = await tally({
+      measure: id, spec: mSpec, ballots, roll: active(root),
+      closes: closesAt(m, mSpec)?.toISOString() ?? null,
+      closeRules: config(root).ballot.close_early,
+    });
+
+    console.log(`\nCounted here, from the signed ballots: ${r.cast} of ${r.electorate} cast, ${r.quorumNeeded} needed.`);
+    for (const x of r.rejected) console.log(`  not counted — ${x.id}: ${x.why}`);
+
+    if (!r.carried) {
+      return fail([
+        `${id} ${r.open ? 'is still open' : 'did not carry'} on the ballots actually cast.`,
+        'art-08/§5/¶1 — a measure that carries is enacted; this one has not.',
+      ]);
+    }
+
+    // If a result file is present and disagrees with the count, say so. One of
+    // them is wrong, and the count is the one that governs.
+    const rf = path.join(dir, '_result.json');
+    if (fs.existsSync(rf)) {
+      try {
+        const claimed = JSON.parse(fs.readFileSync(rf, 'utf8'));
+        if (claimed.carried !== r.carried || claimed.cast !== r.cast) {
+          return fail([
+            `The recorded result for ${id} does not match the ballots.`,
+            `It claims ${claimed.cast} ballot(s) and carried=${claimed.carried}; counting gives ${r.cast} and ${r.carried}.`,
+            'art-08/§4/¶5 — the tally is performed by the published tool, and the tool\u2019s result is the result.',
+          ]);
+        }
+      } catch { return fail([`The recorded result for ${id} cannot be read.`]); }
+    }
 
     // art-08/§1/¶5 — where a measure names the change it authorises, it enacts
     // that change and no other.
@@ -561,6 +610,29 @@ carried. --after-the-fact judges what has already landed.`,
       console.log(`This change is: pull request ${pr || '(none)'}${sha ? ', commit ' + sha.slice(0, 10) : ''}`);
       if (!matched) return fail([`${id} authorises ${named.join(', ')}, which is not this change.`, 'A measure enacts what it named and nothing else (art-08/§1/¶5).']);
       console.log(`✓ this is the change ${id} authorised.`);
+    }
+
+    // art-08/§7/¶2 — and the holder of the power to approve must confirm that
+    // what is being made effective is what carried.
+    const approvers = (arg('approvers') || process.env.APPROVERS || '').split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
+    const office = holderOf(root, 'code.approve');
+    const holder = office ? citizen(root, office.holder) : null;
+    const account = holder?.github || null;
+
+    if (office && account) {
+      console.log(`\n${office.title}: ${office.holder} (${account})`);
+      console.log(`Approved by: ${approvers.join(', ') || '(nobody yet)'}`);
+      if (!approvers.map((a) => a.toLowerCase()).includes(String(account).toLowerCase())) {
+        return fail([
+          `This awaits the ${office.title}'s approval (art-08/§7/¶2).`,
+          'The Assembly decides what the law is; the Keeper confirms that what is',
+          'being made effective is what the Assembly carried.',
+        ]);
+      }
+      console.log(`\u2713 approved by the ${office.title}.`);
+    } else if (office) {
+      console.log(`\n${office.title} is ${office.holder}, but no forge account is recorded, so approval cannot bind yet.`);
+      console.log(`Add "github: <login>" to register/citizens/${office.holder}.yml.`);
     }
 
     console.log(`\n${id} carried. This change may be enacted (art-08/§5/¶1).`);

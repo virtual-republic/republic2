@@ -338,6 +338,51 @@ await check('offices need an ordinary measure', () => gateClass('register/office
 await check('records need nothing', () => gateClass('ledger/events.jsonl') === 'none' || 'records were gated');
 await check('a stylesheet needs nothing', () => gateClass('site/style.css') === 'none' || 'presentation was gated');
 
+let forged = null;
+
+// ballots/ is exempt, so a pull request could carry both a change to the law and
+// a result file claiming it carried. The gate counts the signed ballots instead
+// of believing that file — art-08/§4/¶5.
+await check('a forged result cannot enact a law', () => {
+  put('journal/statutes/forge-target.md', '---\nid: forge-target\ntitle: Target\nclass: policy\nversion: 1\n---\n\n## § 1\n\n¹ Original.\n');
+  git('add', '-A'); git('commit', '-qm', 'a statute to attack');
+  const p0 = run('propose', '--title', 'Sneak', '--by', 'c-0001', '--class', 'policy', '--cites', 'art-01/§4/¶2');
+  const id = (p0.out.match(/Received (P-\d{4})/) || [])[1];
+  if (!id) return p0.out;
+  forged = id;
+  put(`ballots/${id}/_result.json`, JSON.stringify({ measure: id, carried: true, open: false, cast: 9, electorate: 1, quorumNeeded: 1, quorumMet: true, counted: [], rejected: [] }));
+  fs.appendFileSync(path.join(DIR, 'journal/statutes/forge-target.md'), '\n² Slipped in.\n');
+  git('add', '-A'); git('commit', '-qm', 'sneak');
+  const r = run('gate', '--base', 'HEAD~1', '--measure', id);
+  return (!r.ok && /no ballots|did not carry|does not match/.test(r.out)) || `the forgery passed:\n${r.out}`;
+});
+
+await check('a result that disagrees with the ballots is refused', () => {
+  const id = forged;
+  for (const c of ['c-0001', 'c-0004', 'c-0005']) run('vote', id, 'yes', '--by', c);
+  run('count', id);
+  const rf = `ballots/${id}/_result.json`;
+  const claimed = JSON.parse(read(rf));
+  claimed.cast = 99;
+  put(rf, JSON.stringify(claimed));
+  fs.appendFileSync(path.join(DIR, 'journal/statutes/forge-target.md'), '\n³ And again.\n');
+  git('add', '-A'); git('commit', '-qm', 'mismatch');
+  const r = run('gate', '--base', 'HEAD~1', '--measure', id);
+  return (!r.ok && /does not match/.test(r.out)) || `a mismatched result passed:\n${r.out}`;
+});
+
+await check('a change backed by a real vote passes', () => {
+  const p1 = run('propose', '--title', 'Honest', '--by', 'c-0001', '--class', 'policy', '--cites', 'art-01/§4/¶2');
+  const id = (p1.out.match(/Received (P-\d{4})/) || [])[1];
+  if (!id) return p1.out;
+  for (const c of ['c-0001', 'c-0004', 'c-0005']) run('vote', id, 'yes', '--by', c);
+  run('count', id);
+  fs.appendFileSync(path.join(DIR, 'journal/statutes/forge-target.md'), '\n⁴ Properly enacted.\n');
+  git('add', '-A'); git('commit', '-qm', 'honest');
+  const r = run('gate', '--base', 'HEAD~1', '--measure', id);
+  return r.ok || `an honest change was refused:\n${r.out}`;
+});
+
 console.log('\nIntegrity\n');
 
 await check('the register still verifies', () => { const r = run('verify'); return r.out.includes('verifies') || r.out; });
