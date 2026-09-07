@@ -16,7 +16,7 @@ import { at, config, classOf } from './config.js';
 import { append } from './ledger.js';
 import { verify } from './sshsig.js';
 import { citizen, entity, entities, offices, mayExercise, keysOf, writeOffices, asDate } from './registry.js';
-import { state, accounts, mayActFor, matchAuction, TREASURY } from './value.js';
+import { state, accounts, mayActFor, matchBook, TREASURY } from './value.js';
 import { corpus, frontmatter, isoDate } from './corpus.js';
 
 // The message an act signs: everything except the signature, canonically.
@@ -39,6 +39,20 @@ export function writeAct(root, act) {
   const file = path.join(dir, name);
   fs.writeFileSync(file, JSON.stringify(act, null, 2) + '\n');
   return file;
+}
+
+// Publication is promulgation (art-05/§2/¶2). Recognition of a deed and
+// enactment of a measure both go through here, so an issue is written one way.
+export function publishIssue(root, { title, body, cites = [], extra = {} }) {
+  const dir = at(root, 'issues');
+  const year = new Date().toISOString().slice(0, 4);
+  const existing = corpus(root).issues;
+  const number = existing.reduce((n, j) => Math.max(n, j.number || 0), 0) + 1;
+  fs.mkdirSync(path.join(dir, year), { recursive: true });
+  const file = path.join(dir, year, `${String(number).padStart(4, '0')}-${(extra.slug || title).toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}.md`);
+  const { slug: _s, ...front } = extra;
+  fs.writeFileSync(file, `---\n${yaml.dump({ number, date: new Date().toISOString().slice(0, 10), title, ...front, cites }).trim()}\n---\n\n${body}\n`);
+  return { number, file };
 }
 
 const carried = (root, measureId) => {
@@ -191,6 +205,121 @@ export const KINDS = {
     describe: (root, a) => `${a.what} of ${a.entity}`,
   },
 
+  // A deed is recognised title. Anyone may ASK for one; only the holder of the
+  // power may recognise it; and it is valid only once published — so
+  // recognition writes the deed and its Journal issue in one act.
+  'deed.request': {
+    provision: 'art-05/§2/¶1',
+    check(root, a) {
+      if (!citizen(root, a.by) || citizen(root, a.by).status !== 'active') return `${a.by} is not an active citizenship`;
+      if (!a.title) return 'a request must state what is claimed';
+      if (!accounts(root).has(a.holder || a.by)) return `"${a.holder || a.by}" is not an account`;
+      const kinds = config(root).deeds.kinds;
+      if (a.deedKind && !kinds.includes(a.deedKind)) return `unknown kind "${a.deedKind}" — one of ${kinds.join(', ')}`;
+      if (existingDeed(root, a.deed)) return `deed.${a.deed} already exists`;
+      return null;
+    },
+    apply(root, a) {
+      // A request is recorded, and nothing more. It confers no title.
+      const dir = path.join(at(root, 'deeds'), 'requested');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, `${a.deed}.md`), `---\n${yaml.dump({
+        id: a.deed, title: a.title, kind: a.deedKind || 'property',
+        holder: a.holder || a.by, requested_by: a.by, requested: a.at.slice(0, 10),
+        transferable: a.transferable === true,
+        status: 'requested',
+      }).trim()}\n---\n\n${a.text || '¹ ' + a.title}\n`);
+      return { kind: 'deed.requested', payload: { deed: a.deed, holder: a.holder || a.by, title: a.title, transferable: a.transferable === true } };
+    },
+    describe: (root, a) => `${a.by} asks the Keeper to recognise deed.${a.deed} — not yet valid`,
+  },
+
+  'deed.recognise': {
+    provision: 'art-05/§2/¶2',
+    check(root, a) {
+      if (!mayExercise(root, a.by, 'deed.recognise')) {
+        const who = holderOfPower(root, 'deed.recognise');
+        return `only the ${who ? who.title : 'holder of deed.recognise'} may recognise a deed. That is ${who ? who.holder : 'nobody'}.`;
+      }
+      if (existingDeed(root, a.deed)) return `deed.${a.deed} is already recognised`;
+      const req = requestedDeed(root, a.deed);
+      if (!req && !a.title) return `no request for "${a.deed}", and no title given to recognise one directly`;
+      const holder = a.holder || req?.holder;
+      if (!accounts(root).has(holder)) return `"${holder}" is not an account`;
+      return null;
+    },
+    apply(root, a) {
+      const req = requestedDeed(root, a.deed);
+      const holder = a.holder || req?.holder;
+      const transferable = a.transferable !== undefined ? a.transferable === true : !!req?.transferable;
+      const title = a.title || req?.title;
+      const kind = a.deedKind || req?.kind || 'property';
+      const body = a.text || req?.body || `¹ ${title}`;
+
+      // art-05/§2/¶2 — publication is promulgation. The deed and its issue are
+      // written together, because a deed unpublished is not a deed.
+      const issue = publishIssue(root, {
+        title: `Recognition of deed.${a.deed}`,
+        slug: `deed-${a.deed}`,
+        cites: ['art-05/§2/¶2'],
+        extra: { deed: a.deed, holder, slug: `deed-${a.deed}` },
+        body: `The Keeper of the Journal recognises deed.${a.deed} — ${title} — held by ${holder}.\n\nIt is ${transferable ? 'transferable' : 'not transferable'}.\n\nA deed is valid on its recognition and publication, and not before — Article 5 § 2 ².`,
+      });
+
+      fs.mkdirSync(at(root, 'deeds'), { recursive: true });
+      fs.writeFileSync(path.join(at(root, 'deeds'), `${a.deed}.md`), `---\n${yaml.dump({
+        id: a.deed, title, kind, holder, transferable,
+        recognised: a.at.slice(0, 10), recognised_by: a.by, journal: issue.number,
+        ...(req ? { requested_by: req.requested_by, requested: req.requested } : { recognised_directly: true }),
+        status: 'valid',
+      }).trim()}\n---\n\n${body}\n`);
+
+      if (req) fs.rmSync(path.join(at(root, 'deeds'), 'requested', `${a.deed}.md`), { force: true });
+
+      return { kind: 'deed.recognised', payload: { deed: a.deed, holder, transferable, journal: issue.number } };
+    },
+    describe: (root, a) => `deed.${a.deed} recognised and published`,
+  },
+
+  'deed.refuse': {
+    provision: 'art-05/§2/¶1',
+    check(root, a) {
+      if (!mayExercise(root, a.by, 'deed.recognise')) return 'only the holder of deed.recognise may refuse a request';
+      if (!requestedDeed(root, a.deed)) return `no request for "${a.deed}"`;
+      if (!a.reasons) return 'a refusal states its reasons';
+      return null;
+    },
+    apply(root, a) {
+      const f = path.join(at(root, 'deeds'), 'requested', `${a.deed}.md`);
+      const src = fs.readFileSync(f, 'utf8');
+      const [meta, body] = frontmatter(src);
+      fs.writeFileSync(f, `---\n${yaml.dump({ ...meta, status: 'refused', refused: a.at.slice(0, 10), refused_by: a.by, reasons: a.reasons }).trim()}\n---\n${body}`);
+      return { kind: 'deed.refused', payload: { deed: a.deed, reasons: a.reasons } };
+    },
+    describe: (root, a) => `the request for deed.${a.deed} is refused — ${a.reasons}`,
+  },
+
+  'deed.transfer': {
+    provision: 'art-05/§2/¶2',
+    check(root, a) {
+      const d = existingDeed(root, a.deed);
+      if (!d) return `no deed "${a.deed}", or it is not yet recognised`;
+      if (!d.transferable) return `deed.${a.deed} is not transferable`;
+      if (!mayActFor(root, a.by, d.holder)) return `${a.by} does not hold deed.${a.deed}; ${d.holder} does`;
+      if (!accounts(root).has(a.to)) return `"${a.to}" is not an account`;
+      if (a.to === d.holder) return 'it is already held there';
+      return null;
+    },
+    apply(root, a) {
+      const f = path.join(at(root, 'deeds'), `${a.deed}.md`);
+      const [meta, body] = frontmatter(fs.readFileSync(f, 'utf8'));
+      const from = meta.holder;
+      fs.writeFileSync(f, `---\n${yaml.dump({ ...meta, holder: a.to, transferred: a.at.slice(0, 10), previously: [...(meta.previously || []), from] }).trim()}\n---\n${body}`);
+      return { kind: 'deed.transferred', payload: { deed: a.deed, from, to: a.to } };
+    },
+    describe: (root, a) => `deed.${a.deed} passes to ${a.to}`,
+  },
+
   'contract.sign': {
     provision: 'art-09/§7/¶2',
     check(root, a) {
@@ -205,6 +334,22 @@ export const KINDS = {
     describe: (root, a) => `${a.party || a.by} signed ${a.contract}`,
   },
 };
+
+function existingDeed(root, id) {
+  const f = path.join(at(root, 'deeds'), `${id}.md`);
+  if (!fs.existsSync(f)) return null;
+  const [meta, body] = frontmatter(fs.readFileSync(f, 'utf8'));
+  return { ...meta, body: body.trim() };
+}
+
+function requestedDeed(root, id) {
+  const f = path.join(at(root, 'deeds'), 'requested', `${id}.md`);
+  if (!fs.existsSync(f)) return null;
+  const [meta, body] = frontmatter(fs.readFileSync(f, 'utf8'));
+  return meta.status === 'requested' ? { ...meta, body: body.trim() } : null;
+}
+
+const holderOfPower = (root, power) => offices(root).find((o) => (o.powers || []).includes(power)) || null;
 
 // ---- settlement ------------------------------------------------------------------
 
@@ -249,26 +394,48 @@ export async function settle(root, { dry = false } = {}) {
     done(act);
   }
 
-  // ---- the exchange, one auction per instrument -----------------------------
+  // ---- the exchange -----------------------------------------------------
+  //
+  // Orders that do not fill REST: they stay pending, and are matched again next
+  // time. Only a filled or cancelled order leaves the book, so a standing offer
+  // stays standing until somebody takes it — art-10/§5/¶4.
+
+  const cfg = config(root).value.exchange || {};
   const books = new Map();
   for (const o of orders) {
     if (!books.has(o.instrument)) books.set(o.instrument, []);
     books.get(o.instrument).push(o);
   }
+
   for (const [instrument, book] of books) {
-    const { cleared, fills } = matchAuction(book);
-    if (!cleared) { applied.push({ what: `${instrument}: no price clears; the orders stand` }); continue; }
+    const { fills, cancelled, filled } = matchBook(book, {
+      tradeAt: cfg.trade_at || 'resting',
+      cancelRemainder: cfg.partial_fill_cancels_remainder !== false,
+    });
+
+    if (!fills.length) { applied.push({ what: `${instrument}: nothing crosses; ${book.length} order(s) rest` }); continue; }
+
     for (const f of fills) {
-      const s = state(root);
-      const held = (s.holdings.get(f.seller) || new Map()).get(instrument) || 0;
-      const bal = s.balances.get(f.buyer) || 0;
-      if (held < f.quantity) { refused.push({ kind: 'order.matched', why: `${f.seller} holds ${held} at settlement` }); continue; }
-      if (bal < f.quantity * f.price) { refused.push({ kind: 'order.matched', why: `${f.buyer} holds ${bal} at settlement` }); continue; }
-      if (!dry) append(root, { at: new Date().toISOString(), author: f.buyer, kind: 'order.matched', provision: 'art-10/§5/¶2', payload: { instrument, ...f } });
-      applied.push({ what: `${f.seller} → ${f.buyer}  ${f.quantity} × ${instrument} at ${f.price}` });
+      const st = state(root);
+      const held = (st.holdings.get(f.seller) || new Map()).get(instrument) || 0;
+      const bal = st.balances.get(f.buyer) || 0;
+      const cost = f.quantity * f.price;
+      if (held < f.quantity) { refused.push({ kind: 'order.matched', why: `${f.seller} holds ${held} of ${instrument} at settlement, not ${f.quantity}` }); continue; }
+      if (bal < cost) { refused.push({ kind: 'order.matched', why: `${f.buyer} holds ${bal} at settlement, and the trade costs ${cost}` }); continue; }
+      if (!dry) append(root, { at: new Date().toISOString(), author: f.buyer, kind: 'order.matched', provision: 'art-10/§5/¶2',
+        payload: { instrument, buyer: f.buyer, seller: f.seller, quantity: f.quantity, price: f.price, resting: f.resting } });
+      applied.push({ what: `${f.seller} \u2192 ${f.buyer}  ${f.quantity} \u00d7 ${instrument} at ${f.price} (the resting ${f.resting} set the price)` });
     }
-    applied.push({ what: `${instrument}: cleared ${cleared.volume} at ${cleared.price}, one price for all (art-10/§5/¶2)` });
-    for (const o of book) done(o);
+
+    // art-10/§5/¶4 — a cancellation is published like everything else.
+    for (const c of cancelled) {
+      if (!dry) append(root, { at: new Date().toISOString(), author: c.account, kind: 'order.cancelled', provision: 'art-10/§5/¶4',
+        payload: { instrument, account: c.account, side: c.side, filled: c.filled, remainder: c.remainder, why: 'partly filled' } });
+      applied.push({ what: `${c.account}: ${c.remainder} of ${c.quantity} cancelled \u2014 an order partly filled is not left half-alive` });
+    }
+
+    const gone = new Set([...filled, ...cancelled].map((o) => o._file));
+    for (const o of book) if (gone.has(o._file)) done(o);
   }
 
   // ---- contracts ------------------------------------------------------------

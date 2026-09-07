@@ -54,6 +54,7 @@ export const propose = {
   --text <text>       the body, or edit the file afterwards
   --authorises <#12>  the one change this measure permits (art-08/§1/¶5)
   --amends <slug>     the statute it replaces
+  --revises <slug>    the same, and the measure is read as a line-by-line revision
   --office <id>       for an election
   --candidates a,b    for an election`,
   async run({ root, arg }) {
@@ -75,6 +76,7 @@ export const propose = {
     const meta = { id, title, sponsor: by, class: cls, cites, opened: today(), closes };
     if (arg('authorises')) meta.authorises = arg('authorises');
     if (arg('amends')) meta.amends = arg('amends');
+    if (arg('revises')) { meta.revises = arg('revises'); meta.amends = meta.amends || arg('revises'); }
     if (cls === 'election') { meta.office = arg('office'); meta.candidates = (arg('candidates') || by).split(',').map((s) => s.trim()); }
 
     const body = arg('text') || (cls === 'election'

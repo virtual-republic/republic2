@@ -12,6 +12,7 @@ export const RULES = [
   { re: /^checkpoints\//,                need: null, why: 'checkpoints (art-02/§3)' },
   { re: /^journal\/issues\//,            need: null, why: 'publication is promulgation (art-05/§2)' },
   { re: /^journal\/judgments\//,         need: null, why: 'the Court decides; the Assembly does not vote on judgments (art-07)' },
+  { re: /^journal\/deeds\//,             need: null, why: 'the Keeper recognises a deed; the Assembly does not vote on it' },
   { re: /^register\/citizens\//,         need: null, why: 'admission takes effect on recording (art-03/§3)' },
   { re: /^register\/entities\//,         need: null, why: 'formation as of right, or by measure (art-04)' },
   { re: /^(acts|settled|refused)\//,     need: null, why: 'signed instruments and their settlement' },

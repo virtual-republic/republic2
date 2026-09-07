@@ -282,6 +282,86 @@ covers the text as it then stands; an alteration afterwards voids every one.`,
   },
 };
 
+export const deed = {
+  group: 'Deeds',
+  summary: 'request, recognise, refuse and transfer recognised title',
+  help: `  republic deed request --id <slug> --title "..." --by <c-0001> [--kind property] [--transferable] [--holder <account>] [--text "..."]
+  republic deed recognise --id <slug> --by <keeper> [--holder <account>] [--transferable] [--title "..."]
+  republic deed refuse --id <slug> --by <keeper> --reasons "..."
+  republic deed transfer --id <slug> --to <account> --by <holder>
+  republic deed list
+
+art-05/§2/¶2 — a deed is valid only when the Keeper has recognised it and it is
+published in the Journal. Recognition and publication are one act.
+
+Anyone may ask. Only the holder of deed.recognise may recognise, and may do so
+directly without a request. A deed is transferable only if it says so.`,
+  async run({ root, arg, flag, positional }) {
+    const [sub] = positional;
+    const dir = at(root, 'deeds');
+
+    if (!sub || sub === 'list') {
+      const live = corpus(root).deeds;
+      const reqDir = path.join(dir, 'requested');
+      const asked = fs.existsSync(reqDir)
+        ? fs.readdirSync(reqDir).filter((f) => f.endsWith('.md')).map((f) => frontmatter(fs.readFileSync(path.join(reqDir, f), 'utf8'))[0])
+        : [];
+      if (!live.length && !asked.length) { console.log('No deeds, and nothing requested.'); return 0; }
+      if (live.length) {
+        console.log('Recognised — valid (art-05/§2/¶2):\n');
+        for (const d of live) console.log(`  deed.${String(d.id).padEnd(24)} ${String(d.kind || '').padEnd(11)} held by ${String(d.holder).padEnd(10)} ${d.transferable ? 'transferable' : 'not transferable'}   Journal ${d.journal}`);
+      }
+      const pending = asked.filter((d) => d.status === 'requested');
+      const refused = asked.filter((d) => d.status === 'refused');
+      if (pending.length) {
+        console.log(`\nRequested — not valid until recognised:\n`);
+        for (const d of pending) console.log(`  ${String(d.id).padEnd(24)} ${d.title}  (asked by ${d.requested_by})`);
+        const who = offices(root).find((o) => (o.powers || []).includes('deed.recognise'));
+        console.log(`\n  ${who ? who.title + ' is ' + who.holder : 'Nobody holds deed.recognise'}:  republic deed recognise --id <slug> --by ${who ? who.holder : '<keeper>'}`);
+      }
+      if (refused.length) {
+        console.log(`\nRefused:\n`);
+        for (const d of refused) console.log(`  ${String(d.id).padEnd(24)} ${d.reasons}`);
+      }
+      return 0;
+    }
+
+    const by = arg('by');
+    const id = arg('id');
+    if (!by || !id) { console.error('--id and --by are required'); return 2; }
+
+    if (sub === 'request') {
+      const title = arg('title');
+      if (!title) { console.error('--title says what is claimed'); return 2; }
+      await offer(root, by, { kind: 'deed.request', deed: id, title, deedKind: arg('kind', 'property'),
+        holder: arg('holder', by), transferable: flag('transferable'), text: arg('text') || undefined });
+      console.log(`\nIt confers nothing until the Keeper recognises it — art-05/§2/¶2.`);
+      return 0;
+    }
+    if (sub === 'recognise') {
+      await offer(root, by, { kind: 'deed.recognise', deed: id,
+        ...(arg('holder') ? { holder: arg('holder') } : {}),
+        ...(arg('title') ? { title: arg('title') } : {}),
+        ...(arg('kind') ? { deedKind: arg('kind') } : {}),
+        ...(flag('transferable') ? { transferable: true } : {}),
+        text: arg('text') || undefined });
+      return 0;
+    }
+    if (sub === 'refuse') {
+      if (!arg('reasons')) { console.error('--reasons is required; a refusal states them'); return 2; }
+      await offer(root, by, { kind: 'deed.refuse', deed: id, reasons: arg('reasons') });
+      return 0;
+    }
+    if (sub === 'transfer') {
+      if (!arg('to')) { console.error('--to <account>'); return 2; }
+      await offer(root, by, { kind: 'deed.transfer', deed: id, to: arg('to') });
+      return 0;
+    }
+    console.error('republic deed <request|recognise|refuse|transfer|list>');
+    return 2;
+  },
+};
+
 export const settle = {
   group: 'Value',
   summary: 'verify every pending act and record what holds',

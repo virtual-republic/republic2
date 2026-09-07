@@ -1,8 +1,24 @@
 import { DATA, $, say, problem, ready, onIdentity, who, offerCommit, getJSON } from './common.js';
+import { attachPicker, insertSection, insertParagraph, renumber } from './cite.js';
 await ready;
 
 const resolve = await getJSON('/data/resolve.json');
 onIdentity(() => {});
+
+for (const b of document.querySelectorAll('[data-ins]')) b.onclick = () => {
+  const el = $('#body');
+  if (b.dataset.ins === 'section') insertSection(el); else insertParagraph(el);
+};
+
+await attachPicker({
+  box: $('#citepicker'),
+  body: $('#cbody'), doc: $('#cdoc'), sec: $('#csec'), par: $('#cpar'),
+  preview: document.querySelector('[data-citepreview]'),
+  insert: document.querySelector('[data-cite-insert]'),
+  open: document.querySelector('[data-cite-open]'),
+  close: document.querySelector('[data-cite-close]'),
+  target: () => $('#body'),
+});
 
 $('#prepare').onclick = () => {
   try {
@@ -24,7 +40,7 @@ $('#prepare').onclick = () => {
       ...($('#amends').value.trim() ? [`amends: ${$('#amends').value.trim()}`] : []),
       'cites:', ...cites.map((c) => `  - ${c}`),
       `opened: ${now.toISOString().slice(0, 10)}`, `closes: ${closes}`,
-      '---', '', '## § 1', '', '¹ ' + ($('#body').value.trim() || ''), ''].join('\n');
+      '---', '', renumber($('#body').value).trim() || '## § 1\n\n¹ ', ''].join('\n');
 
     const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'measure';
     offerCommit(`proposals/${id}-${slug}.md`, md, `propose ${id}`);

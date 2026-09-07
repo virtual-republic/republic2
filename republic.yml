@@ -10,6 +10,7 @@ founded: 2026-01-01
 # Where everything lives. Decided once, and never migrated.
 paths:
   constitution: journal/constitution
+  deeds: journal/deeds
   statutes: journal/statutes
   judgments: journal/judgments
   issues: journal/issues
@@ -50,7 +51,7 @@ ballot:
 
 offices:
   registrar:  { title: Registrar,             powers: [citizen.admit, citizen.object, entity.register] }
-  keeper:     { title: Keeper of the Journal, powers: [journal.publish, checkpoint.sign, code.approve] }
+  keeper:     { title: Keeper of the Journal, powers: [journal.publish, checkpoint.sign, code.approve, deed.recognise] }
   treasurer:  { title: Treasurer,             powers: [value.issue, treasury.disburse] }
   auditor:    { title: Auditor,               powers: [audit.report] }
   judge:      { title: Judge of the Court,    powers: [court.halt, court.void, court.judge] }
@@ -67,11 +68,29 @@ value:
   unit: obol
   subunit: mina
   issue_cap: 100000
-  exchange: uniform_price_auction
+
+  # art-10/§5/¶2 — the method is fixed by statute, and these are the settings it
+  # reads. price_time: best price first, and among equal prices the order that
+  # arrived first. A trade happens at the RESTING order's price, so the one who
+  # waited sets the terms.
+  exchange:
+    method: price_time
+    trade_at: resting
+    # An order partly filled is not left half-alive. The remainder is cancelled,
+    # so nobody is left holding a position they did not choose to keep.
+    partial_fill_cancels_remainder: true
 
 contracts:
   all_parties_must_sign: true
   expiry: 30
+
+# A deed is recognised title. It is valid only when the Keeper has recognised it
+# and it has been published in the Journal — recognition and publication are one
+# act, so neither can happen without the other.
+deeds:
+  recognised_by: deed.recognise      # the power, not the person
+  transferable_by_default: false
+  kinds: [property, claim, right, licence, membership]
 
 journal:
   publish_on_enactment: true

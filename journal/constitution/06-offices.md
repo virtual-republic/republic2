@@ -44,3 +44,7 @@ title: Offices
 ² No officer MAY use office for private gain, or accept anything of value that compromises the independent exercise of official judgment.
 
 ³ The Auditor SHALL report to the Assembly at least twice a year, and the report is published.
+
+⁴ An officer who suspends, disables or circumvents a check the Republic has put upon its own procedure MUST publish, within seven days, what was done and why.
+
+⁵ An officer holding a power over a procedure MUST NOT be the sole judge of a complaint about their exercise of it.

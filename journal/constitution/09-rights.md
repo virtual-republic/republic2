@@ -67,7 +67,15 @@ to a rule executed by a tool, and MUST NOT be so reduced.*
 
 ² No provision of this Constitution and no statute MAY impede a departure or condition it on anything.
 
-## § 10  Limitation
+## § 10  Decision by machine
+
+¹ No right in this Article is denied, and no citizen is sanctioned, by the operation of a tool alone.
+
+² A citizen affected by an automated refusal MAY require that it be stated in words, with the provision relied on, and MAY put the question to the Court.
+
+³ A tool that refuses an act MUST say which provision it refuses under.
+
+## § 11  Limitation
 
 ¹ A right in this Article MAY be limited only by statute, only so far as necessary in a self-governing association, and only proportionately.
 
@@ -75,4 +83,4 @@ to a rule executed by a tool, and MUST NOT be so reduced.*
 
 ³ No limitation MAY negate the essential content of a right.
 
-⁴ Section 9 admits of no limitation.
+⁴ Sections 9 and 10 admit of no limitation.

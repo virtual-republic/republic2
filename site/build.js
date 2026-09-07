@@ -14,11 +14,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { at, config } from '../core/config.js';
-import { corpus, linkify, slug, isoDate, hrefOf, frontmatter, MARKS } from '../core/corpus.js';
+import { corpus, linkify, slug, isoDate, hrefOf, frontmatter as frontmatterOf, MARKS } from '../core/corpus.js';
 import { records, verifyChain, checkpoints } from '../core/ledger.js';
 import { citizens, active, entities, offices, asDate } from '../core/registry.js';
-import { state, accounts, clearingPrice, TREASURY } from '../core/value.js';
+import { state, accounts, bookOf, matchBook, TREASURY } from '../core/value.js';
 import { closesAt } from '../core/tally.js';
+import { diffLines, pairEdits, summarise, locate, hunks } from '../core/diff.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -42,7 +43,7 @@ export async function buildSite(root, { base = '' } = {}) {
   // The browser runs the same modules as the command line, copied verbatim.
   // Not a port, not a re-implementation — the same files.
   fs.mkdirSync(path.join(OUT, 'js/core'), { recursive: true });
-  for (const f of ['canonical.js', 'sshsig.js', 'tally.js']) {
+  for (const f of ['canonical.js', 'sshsig.js', 'tally.js', 'diff.js']) {
     fs.copyFileSync(path.join(HERE, '..', 'core', f), path.join(OUT, 'js/core', f));
   }
   fs.copyFileSync(path.join(HERE, 'style.css'), path.join(OUT, 'style.css'));
@@ -63,9 +64,10 @@ export async function buildSite(root, { base = '' } = {}) {
   // ---- pages -----------------------------------------------------------------
 
   const NAV = [['', 'Republic'], ['journal', 'Journal'], ['assembly', 'Assembly'],
-               ['office', 'Office'], ['register', 'Register'], ['value', 'Value'], ['ledger', 'Ledger']];
+               ['office', 'Office'], ['register', 'Register'], ['value', 'Value'],
+               ['exchange', 'Exchange'], ['ledger', 'Ledger']];
   const SUB = [['journal/constitution', 'Constitution'], ['journal/law', 'Law'],
-               ['journal/court', 'Court'], ['journal/issues', 'Issues']];
+               ['journal/court', 'Court'], ['journal/deeds', 'Deeds'], ['journal/issues', 'Issues']];
 
   let pageCount = 0;
 
@@ -210,6 +212,7 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
       <tr><td><a href="${u('/journal/constitution/')}">Constitution</a></td><td class="q">${C.articles.length} articles · the highest law</td></tr>
       <tr><td><a href="${u('/journal/law/')}">Law</a></td><td class="q">${C.statutes.length} statute${C.statutes.length === 1 ? '' : 's'} in force</td></tr>
       <tr><td><a href="${u('/journal/court/')}">Court</a></td><td class="q">${C.judgments.length} case${C.judgments.length === 1 ? '' : 's'}</td></tr>
+      <tr><td><a href="${u('/journal/deeds/')}">Deeds</a></td><td class="q">${C.deeds.length} recognised</td></tr>
       <tr><td><a href="${u('/journal/issues/')}">Issues</a></td><td class="q">${C.issues.length} issue${C.issues.length === 1 ? '' : 's'}</td></tr>
     </tbody></table>
     <p class="note">On disk this is one directory. The site follows the corpus rather than inventing a second arrangement.</p>`,
@@ -273,14 +276,52 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
       <h1>${esc(s.title || s.id)}<span class="sub">${esc(cfg.classes[s.class]?.label || s.class || '')}${s.version ? ' · version ' + s.version : ''}${s.enacted ? ' · in force since ' + esc(isoDate(s.enacted)) : ''}${s.measure ? ' · ' + esc(s.measure) : ''}</span></h1>
       <div class="row">
         <button class="plain" data-copy="stat.${esc(s.id)}">copy citation</button>
-        <a class="button" target="_blank" rel="noopener" href="https://github.com/${esc(repo)}/edit/${esc(branch)}/journal/statutes/${esc(s.id)}.md">Edit this statute</a>
+        <button id="revise">Propose a revision</button>
       </div>
-      <p class="note">Editing statute is an act of the Assembly. The gate refuses the change unless a measure of the right class has carried — art-08/§5/¶1.</p>
+      <p class="note">Editing statute is an act of the Assembly — art-08/§5/¶1. A revision is a measure like any other: it goes to a vote, and until it carries the text below is what is in force.</p>
+
+      <div id="editor" hidden>
+        <h2>Revise</h2>
+        <p data-msg class="msg quiet"></p>
+        <label for="rtitle">Title of the measure</label><input type="text" id="rtitle" value="${esc(s.title || s.id)}">
+        <label for="rclass">Class</label><select id="rclass">${Object.entries(cfg.classes).filter(([k]) => k !== 'election').map(([k, v]) => `<option value="${esc(k)}"${k === s.class ? ' selected' : ''}>${esc(v.label)}</option>`).join('')}</select>
+
+        <div class="editorbar">
+          <button type="button" class="plain" data-ins="section">new §</button>
+          <button type="button" class="plain" data-ins="paragraph">new ¶</button>
+          <button type="button" class="plain" data-cite-open>insert a citation</button>
+          <button type="button" class="plain" data-preview>see the changes</button>
+        </div>
+        <textarea id="rtext" rows="20" spellcheck="false"></textarea>
+
+        <div id="citepicker" hidden>
+          <h3>Cite a provision</h3>
+          <label for="cbody">Body of law</label><select id="cbody"></select>
+          <label for="cdoc">Text</label><select id="cdoc"></select>
+          <label for="csec">§</label><select id="csec"></select>
+          <label for="cpar">¶</label><select id="cpar"></select>
+          <p class="quiet" data-citepreview>—</p>
+          <div class="row"><button type="button" data-cite-insert>Insert</button><button type="button" class="plain" data-cite-close>close</button></div>
+        </div>
+
+        <div id="preview" hidden></div>
+
+        <label for="rcites">Provisions the measure is made under, one per line</label>
+        <textarea id="rcites" rows="2">${esc(([].concat(s.cites || [])).join('\n'))}</textarea>
+        <div class="row"><button id="rprepare">Prepare the measure</button><a data-commit class="button" hidden>Open on GitHub</a></div>
+        <div data-out class="out" hidden></div>
+      </div>
       <article class="law">${sections(s.sections, `stat.${s.id}`)}</article>
       ${(s.history || []).length ? `<h2>Earlier versions</h2><ul class="list">${[].concat(s.history).map((h) => `<li class="quiet">${esc(String(h))}</li>`).join('')}</ul>` : ''}
       ${s.journal ? `<h2>Promulgated</h2><ul class="list"><li><a href="${u(`/journal/issues/${s.journal}/`)}">Journal ${s.journal}</a></li>${s.measure ? `<li><a href="${u(`/assembly/${s.measure}/`)}">${esc(s.measure)}</a></li>` : ''}</ul>` : ''}
       ${cited.length ? `<h2>Cited by</h2><ul class="list">${cited.map((l) => `<li><a href="${u(l.href)}">${esc(l.label)}</a><span class="meta">${esc(String(l.at || '').slice(0, 10))}</span></li>`).join('')}</ul>` : ''}`,
-      { on: 'journal/law' }));
+      { on: 'journal/law', module: 'revise', data: {
+        statute: s.id,
+        text: fs.readFileSync(s.path, 'utf8').split(/\n---\n/).slice(1).join('\n---\n').trim(),
+        classes: cfg.classes,
+        cites: [].concat(s.cites || []),
+        next: 'P-' + String(C.measures.reduce((n, m) => Math.max(n, Number(String(m.id).replace('P-', '')) || 0), 0) + 1).padStart(4, '0'),
+      } }));
   }
 
   write('journal/issues', page('Journal', `
@@ -349,13 +390,108 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
       { on: 'journal/court' }));
   }
 
+  // ---- deeds ------------------------------------------------------------------
+
+  const keeperOffice = offs.find((o) => (o.powers || []).includes('deed.recognise'));
+  const requestedDir = path.join(at(root, 'deeds'), 'requested');
+  const requested = fs.existsSync(requestedDir)
+    ? fs.readdirSync(requestedDir).filter((f) => f.endsWith('.md'))
+        .map((f) => { const [m, b] = frontmatterOf(fs.readFileSync(path.join(requestedDir, f), 'utf8')); return { ...m, body: b }; })
+    : [];
+  const pendingDeeds = requested.filter((d) => d.status === 'requested');
+  const refusedDeeds = requested.filter((d) => d.status === 'refused');
+
+  write('journal/deeds', page('Deeds', `
+    <h1>Deeds<span class="sub">Recognised title. A deed is valid only when the Keeper has recognised it and it is published in the Journal — art-05/§2/¶2.</span></h1>
+
+    <h2>Recognised</h2>
+    ${C.deeds.length ? `<table><thead><tr><th>Deed</th><th>Kind</th><th>Held by</th><th>Transferable</th><th>Published</th></tr></thead>
+    <tbody>${C.deeds.map((d) => `<tr>
+      <td><a href="${u(`/journal/deeds/${d.id}/`)}">${esc(d.title || d.id)}</a></td>
+      <td class="q">${esc(d.kind || '')}</td><td>${esc(d.holder)}</td>
+      <td class="q">${d.transferable ? 'yes' : 'no'}</td>
+      <td class="q">${d.journal ? `<a href="${u(`/journal/issues/${d.journal}/`)}">Journal ${d.journal}</a>` : '—'}</td></tr>`).join('')}</tbody></table>`
+    : '<p class="quiet">None recognised.</p>'}
+
+    <h2>Requested</h2>
+    <p class="quiet">A request confers nothing. It is not a deed until the Keeper recognises it.</p>
+    ${pendingDeeds.length ? `<table><thead><tr><th>Asked for</th><th>By</th><th>For</th><th>Transferable</th></tr></thead>
+    <tbody>${pendingDeeds.map((d) => `<tr><td>${esc(d.title || d.id)}</td><td class="q">${esc(d.requested_by)}</td>
+      <td class="q">${esc(d.holder)}</td><td class="q">${d.transferable ? 'yes' : 'no'}</td></tr>`).join('')}</tbody></table>`
+    : '<p class="quiet">Nothing outstanding.</p>'}
+
+    ${refusedDeeds.length ? `<h2>Refused</h2>
+    <table><thead><tr><th>Asked for</th><th>Reasons</th></tr></thead>
+    <tbody>${refusedDeeds.map((d) => `<tr><td>${esc(d.title || d.id)}</td><td class="q">${esc(d.reasons || '')}</td></tr>`).join('')}</tbody></table>` : ''}
+
+    <h2>Ask for a deed</h2>
+    <p data-msg class="msg quiet"></p>
+    <label for="dtitle">What is claimed</label><input type="text" id="dtitle" placeholder="The mill at the river">
+    <label for="dkind">Kind</label><select id="dkind">${cfg.deeds.kinds.map((k) => `<option>${esc(k)}</option>`).join('')}</select>
+    <label for="dholder">To be held by</label><select id="dholder">${[...ACCT.keys()].map((x) => `<option>${esc(x)}</option>`).join('')}</select>
+    <label for="dtransferable">Transferable</label>
+    <select id="dtransferable"><option value="no">no — it stays where it is granted</option><option value="yes">yes — the holder may pass it on</option></select>
+    <label for="dtext">The deed itself</label><textarea id="dtext" rows="5" placeholder="¹ ..."></textarea>
+    <div class="row"><button data-act="request" disabled>Sign the request</button></div>
+
+    <div data-keeper hidden>
+      <hr class="rule">
+      <h2>Recognise or refuse</h2>
+      <p class="quiet">Yours alone — art-05/§2/¶2. Recognition publishes the deed in the Journal, which is what makes it valid.</p>
+      <label for="rid">Request</label><select id="rid"></select>
+      <div class="row"><button data-act="recognise">Recognise and publish</button></div>
+      <label for="rreasons">Reasons for refusing</label><input type="text" id="rreasons">
+      <div class="row"><button data-act="refuse" class="plain">Refuse the request</button></div>
+
+      <h3>Recognise one directly</h3>
+      <p class="quiet">No request is needed. You may recognise title on your own motion.</p>
+      <label for="did">Identifier</label><input type="text" id="did" placeholder="river-mill">
+      <label for="dtitle2">What is recognised</label><input type="text" id="dtitle2">
+      <label for="dholder2">Held by</label><select id="dholder2">${[...ACCT.keys()].map((x) => `<option>${esc(x)}</option>`).join('')}</select>
+      <label for="dtransferable2">Transferable</label>
+      <select id="dtransferable2"><option value="no">no</option><option value="yes">yes</option></select>
+      <div class="row"><button data-act="recognise-direct">Recognise and publish</button></div>
+    </div>
+
+    <div data-out class="out" hidden></div>
+    <div class="row"><a data-commit class="button" hidden>Open on GitHub</a></div>`,
+    { on: 'journal/deeds', module: 'deeds', data: {
+      kinds: cfg.deeds.kinds,
+      pending: pendingDeeds.map((d) => ({ id: d.id, title: d.title })),
+      keeper: keeperOffice ? { id: keeperOffice.id, title: keeperOffice.title, holder: keeperOffice.holder } : null,
+      accounts: [...ACCT.keys()],
+    } }));
+
+  for (const d of C.deeds) {
+    write(`journal/deeds/${d.id}`, page(d.title || d.id, `
+      <p class="crumb"><a href="${u('/journal/deeds/')}">Deeds</a> · deed.${esc(d.id)}</p>
+      <h1>${esc(d.title || d.id)}<span class="sub">${esc(d.kind || 'deed')} · held by ${esc(d.holder)} · ${d.transferable ? 'transferable' : 'not transferable'} · recognised ${esc(d.recognised)}</span></h1>
+      <table><tbody>
+        <tr><td class="q">Cite as</td><td>deed.${esc(d.id)}</td></tr>
+        <tr><td class="q">Recognised by</td><td>${esc(d.recognised_by || '')}${d.recognised_directly ? ' <span class="q">on their own motion</span>' : ''}</td></tr>
+        <tr><td class="q">Published</td><td>${d.journal ? `<a href="${u(`/journal/issues/${d.journal}/`)}">Journal ${d.journal}</a> — this is what makes it valid` : '—'}</td></tr>
+        ${d.requested_by ? `<tr><td class="q">Asked for by</td><td>${esc(d.requested_by)} on ${esc(String(d.requested))}</td></tr>` : ''}
+        ${(d.previously || []).length ? `<tr><td class="q">Previously held by</td><td>${[].concat(d.previously).map(esc).join(', ')}</td></tr>` : ''}
+      </tbody></table>
+      <article class="law">${markdown(d.body)}</article>
+      <div class="row"><button class="plain" data-copy="deed.${esc(d.id)}">copy citation</button></div>
+
+      ${d.transferable ? `<h2>Transfer</h2>
+      <p data-msg class="msg quiet"></p>
+      <label for="to">To</label><select id="to">${[...ACCT.keys()].filter((x) => x !== d.holder).map((x) => `<option>${esc(x)}</option>`).join('')}</select>
+      <div class="row"><button data-act="transfer" disabled>Sign the transfer</button><a data-commit class="button" hidden>Open on GitHub</a></div>
+      <div data-out class="out" hidden></div>`
+      : '<p class="note">This deed is not transferable. It stays where it was granted — art-05/§2/¶2.</p>'}`,
+      { on: 'journal/deeds', module: 'deed', data: { deed: d.id, holder: d.holder, transferable: !!d.transferable } }));
+  }
+
   // ---- assembly ------------------------------------------------------------------
 
   write('assembly', page('Assembly', `
     <h1>Assembly<span class="sub">The Assembly is all citizens — art-06/§2/¶1.</span></h1>
     <ul class="list">${C.measures.length ? C.measures.slice().reverse().map((m) => {
       const s = statusOf(m);
-      return `<li><a href="${u(`/assembly/${m.id}/`)}">${esc(m.title)}</a><span class="meta">${esc(cfg.classes[m.class]?.label || m.class)} · ${esc(s.label)}</span></li>`;
+      return `<li><a href="${u(`/assembly/${m.id}/`)}">${esc(m.title)}</a><span class="meta">${m.revises || m.amends ? 'revision of stat.' + esc(m.revises || m.amends) + ' · ' : ''}${esc(cfg.classes[m.class]?.label || m.class)} · ${esc(s.label)}</span></li>`;
     }).join('') : '<li class="quiet">Nothing before the Assembly.</li>'}</ul>
 
     <h2>Lay a measure</h2>
@@ -365,7 +501,24 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
     <label for="cites">Provisions it is made under, one per line</label><textarea id="cites" rows="3"></textarea>
     <label for="authorises">Pull request or commit it authorises, if it changes the code or the law (optional)</label><input type="text" id="authorises" placeholder="#12">
     <label for="amends">Statute it replaces, by slug, if it amends one (optional)</label><input type="text" id="amends">
-    <label for="body">Text</label><textarea id="body" rows="8"></textarea>
+    <label for="body">Text</label>
+    <div class="editorbar">
+      <button type="button" class="plain" data-ins="section">new §</button>
+      <button type="button" class="plain" data-ins="paragraph">new ¶</button>
+      <button type="button" class="plain" data-cite-open>insert a citation</button>
+    </div>
+    <textarea id="body" rows="14" spellcheck="false" placeholder="## § 1  Heading&#10;&#10;¹ ..."></textarea>
+
+    <div id="citepicker" hidden>
+      <h3>Cite a provision</h3>
+      <label for="cbody">Body of law</label><select id="cbody"></select>
+      <label for="cdoc">Text</label><select id="cdoc"></select>
+      <label for="csec">§</label><select id="csec"></select>
+      <label for="cpar">¶</label><select id="cpar"></select>
+      <p class="quiet" data-citepreview>—</p>
+      <div class="row"><button type="button" data-cite-insert>Insert</button><button type="button" class="plain" data-cite-close>close</button></div>
+    </div>
+
     <div class="row"><button id="prepare">Check</button><a data-commit class="button" hidden>Open on GitHub</a></div>
     <div data-out class="out" hidden></div>`,
     { on: 'assembly', module: 'propose', data: {
@@ -389,7 +542,35 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
       <p class="crumb"><a href="${u('/assembly/')}">Assembly</a> · ${esc(m.id)}</p>
       <h1>${esc(m.title)}<span class="sub">${esc(spec.label || m.class)} · sponsored by ${esc(m.sponsor || '')} · ${s.open ? 'closes ' + esc(m.closes || '') : esc(s.label)}</span></h1>
       <p class="state" data-state>counting…</p>
-      <article class="law">${m.sections.length ? sections(m.sections, `prop.${m.id}`) : `<p>${link(m.body)}</p>`}</article>
+      ${(() => {
+        const target = m.revises || m.amends;
+        const st = target ? C.statutes.find((x) => x.id === target) : null;
+        if (!st) return `<article class="law">${m.sections.length ? sections(m.sections, `prop.${m.id}`) : `<p>${link(m.body)}</p>`}</article>`;
+
+        // art-08/§1/¶2 — a measure states its text. A revision states it as a
+        // change to what is in force, so it is read that way.
+        const before = fs.readFileSync(st.path, 'utf8').split(/\n---\n/).slice(1).join('\n---\n').trim();
+        const d = pairEdits(diffLines(before, m.body));
+        const n = summarise(d);
+        const where = locate(m.body);
+        const wasWhere = locate(before);
+
+        return `<p class="quiet">A revision of <a href="${u(`/journal/law/${st.id}/`)}">stat.${esc(st.id)}</a>${st.version ? `, version ${st.version}` : ''} —
+          ${n.added} added, ${n.altered} altered, ${n.removed} struck. Until it carries, the text in force is unchanged.</p>
+        <div class="diff">${hunks(d, 2).map((x) => {
+          if (x.kind === 'gap') return '<div class="gap">\u22ef</div>';
+          const w = x.after ? where[x.after - 1] : x.before ? wasWhere[x.before - 1] : null;
+          const at = w && w.section ? `§${w.section}${w.paragraph ? '/¶' + w.paragraph : ''}` : '';
+          if (x.kind === 'altered') return `<div class="line was"><span class="at">${esc(at)}</span><span class="sign">\u2212</span><span class="t">${esc(x.from)}</span></div>
+            <div class="line now"><span class="at"></span><span class="sign">+</span><span class="t">${esc(x.text)}</span></div>`;
+          const cls = { same: 'same', added: 'now', removed: 'was' }[x.kind];
+          const sign = { same: ' ', added: '+', removed: '\u2212' }[x.kind];
+          return `<div class="line ${cls}"><span class="at">${esc(at)}</span><span class="sign">${sign}</span><span class="t">${esc(x.text)}</span></div>`;
+        }).join('')}</div>
+
+        <h2>The text as it would stand</h2>
+        <article class="law">${m.sections.length ? sections(m.sections, `prop.${m.id}`) : `<p>${link(m.body)}</p>`}</article>`;
+      })()}
 
       <h2>Made under</h2>
       <ul class="list">${[].concat(m.cites || []).map((c) => `<li>${link(String(c))}</li>`).join('') || '<li class="quiet">—</li>'}</ul>
@@ -643,22 +824,24 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
     <h1>Exchange<span class="sub">Cleared by periodic auction at a uniform price, with no priority to the order of arrival — art-10/§5/¶2.</span></h1>
     ${instruments.length ? instruments.map(([inst, m]) => {
       const book = pending.filter((o) => o.instrument === inst);
-      const bids = book.filter((o) => o.side === 'buy').sort((a, b) => b.price - a.price);
-      const asks = book.filter((o) => o.side === 'sell').sort((a, b) => a.price - b.price);
-      const ind = clearingPrice(book);
+      const { bids, asks, best, spread } = bookOf(book);
+      const would = matchBook(book, { tradeAt: cfg.value.exchange?.trade_at || 'resting', cancelRemainder: cfg.value.exchange?.partial_fill_cancels_remainder !== false });
       const last = trades.filter((t) => t.payload.instrument === inst).slice(-1)[0];
       return `<h2>${esc(inst)}</h2>
       <table><tbody>
         <tr><td class="q">Issuer</td><td><a href="${u(`/register/${m.issuer}/`)}">${esc(m.issuer)}</a></td></tr>
         <tr><td class="q">Issued</td><td>${m.issued}</td></tr>
-        <tr><td class="q">Last price</td><td>${last ? last.payload.price + ' ' + esc(UNIT) : '—'}</td></tr>
-        <tr><td class="q">Next auction would clear</td><td>${ind ? `${ind.volume} at ${ind.price} ${esc(UNIT)}` : 'nothing — no crossing orders'}</td></tr>
+        <tr><td class="q">Last traded</td><td>${last ? last.payload.price + ' ' + esc(UNIT) : '\u2014'}</td></tr>
+        <tr><td class="q">Best bid / best ask</td><td>${best.bid ?? '\u2014'} / ${best.ask ?? '\u2014'}${spread !== null ? ` <span class="q">spread ${spread}</span>` : ''}</td></tr>
+        <tr><td class="q">Next settlement would</td><td>${would.fills.length
+          ? would.fills.map((f) => `trade ${f.quantity} at ${f.price}`).join('; ') + (would.cancelled.length ? `, and cancel ${would.cancelled.map((c) => c.remainder).join(' + ')} left over` : '')
+          : 'match nothing \u2014 the spread has not crossed'}</td></tr>
       </tbody></table>
       <table><thead><tr><th>Bids</th><th>Asks</th></tr></thead><tbody><tr>
-        <td>${bids.length ? bids.map((o) => `${o.quantity} @ ${o.price} <span class="q">${esc(o.account)}</span>`).join('<br>') : '<span class="q">none</span>'}</td>
-        <td>${asks.length ? asks.map((o) => `${o.quantity} @ ${o.price} <span class="q">${esc(o.account)}</span>`).join('<br>') : '<span class="q">none</span>'}</td>
+        <td>${bids.length ? bids.map((o) => `${o.quantity} @ ${o.price} <span class="q">${esc(o.account)} \u00b7 ${esc(String(o.at).slice(0, 10))}</span>`).join('<br>') : '<span class="q">none</span>'}</td>
+        <td>${asks.length ? asks.map((o) => `${o.quantity} @ ${o.price} <span class="q">${esc(o.account)} \u00b7 ${esc(String(o.at).slice(0, 10))}</span>`).join('<br>') : '<span class="q">none</span>'}</td>
       </tr></tbody></table>`;
-    }).join('') : '<p class="quiet">No instrument has been issued, so there is nothing to trade. A company may issue a share in itself — art-10/§4/¶1.</p>'}
+    }).join('') : '<p class="quiet">No instrument has been issued, so there is nothing to trade. A company may issue a share in itself \u2014 art-10/§4/¶1.</p>'}
 
     <h2 data-issue-head hidden>Issue a share</h2>
     <div data-issue hidden>
@@ -679,19 +862,29 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
     <label for="oprice">Price in ${esc(UNIT)}s</label><input type="text" id="oprice" inputmode="numeric">
     <div class="row"><button data-act="order" disabled>Sign order</button><a data-commit class="button" hidden>Open on GitHub</a></div>
     <div data-out class="out" hidden></div>
-    <p class="note">An order does not execute on arrival. It joins the book and clears at the next auction, at one price for everyone.</p>` : ''}
+    <p class="note">Best price first; among equal prices, whoever arrived first. A trade happens at the <strong>resting</strong> order's price \u2014 the one who waited set the terms. An order partly filled is cancelled for the remainder, so nothing is left half-alive. Orders that do not cross rest until they do \u2014 art-10/§5.</p>` : ''}
 
     ${refusedList.length ? `<h2>Refused</h2>
     <p class="quiet">An instrument that did not settle is kept with the reason, rather than retried or discarded.</p>
     <table><thead><tr><th>Kind</th><th>By</th><th>Why</th></tr></thead>
     <tbody>${refusedList.map((r) => `<tr><td>${esc(r.kind || '—')}</td><td class="q">${esc(r.by || '')}</td><td class="q">${esc(r._refused?.why || '')}</td></tr>`).join('')}</tbody></table>` : ''}
 
+    ${(() => {
+      const cancels = ev.filter((e) => e.kind === 'order.cancelled');
+      return cancels.length ? `<h2>Cancelled</h2>
+      <p class="quiet">An order partly filled is cancelled for the remainder \u2014 art-10/§5/¶4.</p>
+      <table><thead><tr><th>Instrument</th><th>Account</th><th>Side</th><th>Filled</th><th>Cancelled</th></tr></thead>
+      <tbody>${cancels.slice().reverse().map((e) => `<tr><td>${esc(e.payload.instrument)}</td><td class="q">${esc(e.payload.account)}</td>
+        <td class="q">${esc(e.payload.side)}</td><td>${e.payload.filled}</td><td>${e.payload.remainder}</td></tr>`).join('')}</tbody></table>` : '';
+    })()}
+
     <h2>Trades</h2>
-    <table><thead><tr><th>Instrument</th><th>Seller</th><th>Buyer</th><th>Quantity</th><th>Price</th><th>When</th></tr></thead>
+    <table><thead><tr><th>Instrument</th><th>Seller</th><th>Buyer</th><th>Quantity</th><th>Price</th><th>Set by</th><th>When</th></tr></thead>
     <tbody>${trades.slice().reverse().map((e) => `<tr><td>${esc(e.payload.instrument)}</td><td class="q">${esc(e.payload.seller)}</td>
-      <td class="q">${esc(e.payload.buyer)}</td><td>${e.payload.quantity}</td><td>${e.payload.price}</td><td class="q">${esc(e.at.slice(0, 10))}</td></tr>`).join('')
-      || '<tr><td colspan="6" class="q">No trades yet.</td></tr>'}</tbody></table>`,
-    { on: 'value', module: 'exchange', wide: true, data: {
+      <td class="q">${esc(e.payload.buyer)}</td><td>${e.payload.quantity}</td><td>${e.payload.price}</td>
+      <td class="q">the resting ${esc(e.payload.resting || '\u2014')}</td><td class="q">${esc(e.at.slice(0, 10))}</td></tr>`).join('')
+      || '<tr><td colspan="7" class="q">No trades yet.</td></tr>'}</tbody></table>`,
+    { on: 'exchange', module: 'exchange', wide: true, data: {
       accounts: [...ACCT.entries()].map(([id, m]) => ({ id, kind: m.kind, organs: m.organs || [] })),
       issuers: ents.filter((e) => e.status === 'active' && cfg.entities[e.type]?.instruments)
         .map((e) => ({ id: e.id, name: e.name, organs: e.organs || [] })),
@@ -702,7 +895,7 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
   const contractList = fs.existsSync(contractsDir)
     ? fs.readdirSync(contractsDir).filter((f) => f.endsWith('.md')).map((f) => {
         const src = fs.readFileSync(path.join(contractsDir, f), 'utf8');
-        const [meta, body] = frontmatter(src);
+        const [meta, body] = frontmatterOf(src);
         const id = meta.id || path.basename(f, '.md');
         const sigDir = path.join(contractsDir, id);
         const signed = fs.existsSync(sigDir) ? fs.readdirSync(sigDir).filter((x) => x.endsWith('.json')).map((x) => path.basename(x, '.json')) : [];
@@ -785,6 +978,21 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
   const resolveIndex = {};
   for (const [id] of C.entries) resolveIndex[id] = B + hrefOf(id);
   fs.writeFileSync(path.join(OUT, 'data/resolve.json'), JSON.stringify(resolveIndex));
+
+  // Everything citable, browsable by corpus → text → § → ¶. The picker reads
+  // this, so anything it offers is guaranteed to resolve.
+  const titleOf = (corpusName, document) => {
+    if (corpusName === 'const') return C.articles.find((a) => a.id === document)?.title || document;
+    if (corpusName === 'stat') return C.statutes.find((x) => x.id === document)?.title || document;
+    if (corpusName === 'deed') return C.deeds.find((x) => x.id === document)?.title || document;
+    return document;
+  };
+  fs.writeFileSync(path.join(OUT, 'data/citations.json'), JSON.stringify(
+    [...C.entries.values()]
+      .filter((e) => ['const', 'stat', 'deed'].includes(e.corpus))
+      .map((e) => ({ id: e.id, corpus: e.corpus, document: e.document, title: titleOf(e.corpus, e.document),
+                     section: e.section ?? null, paragraph: e.paragraph ?? null, label: e.label })),
+  ));
   fs.writeFileSync(path.join(OUT, 'data/citizens.json'), JSON.stringify(roll.map((c) => ({ id: c.id, status: c.status, keys: c.keys || [] })), null, 2));
   fs.writeFileSync(path.join(OUT, 'data/events.jsonl'), fs.existsSync(at(root, 'ledger')) ? fs.readFileSync(at(root, 'ledger')) : '');
 

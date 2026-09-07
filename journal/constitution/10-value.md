@@ -39,9 +39,13 @@ title: Value
 
 ¹ The Republic maintains an exchange for the transfer of instruments.
 
-² The exchange clears by periodic auction at a uniform price, and gives no priority to the order of arrival within a period.
+² The method by which orders are matched is fixed by statute, and MUST treat every order alike according to its stated terms.
 
-³ Every order, every clearing and every price is published.
+³ No order MAY be given precedence on any ground other than those the statute states.
+
+⁴ Every order, every match, every price and every cancellation is published, and the book is public before it clears.
+
+⁵ No person MAY see an order before it is published, and no organ MAY trade on knowledge of an unpublished order.
 
 ## § 6  Treasury
 

@@ -15,6 +15,8 @@ title: Deliberation and Decision
 
 ⁵ A measure MAY name the change it authorises. Where it does, it enacts that change and no other.
 
+⁶ A measure that fails MAY be laid again, but not within the period statute fixes, and not in the same terms.
+
 ## § 2  Deliberation
 
 ¹ On receipt a measure is published and a period of deliberation opens.
@@ -47,7 +49,9 @@ title: Deliberation and Decision
 
 ⁴ The tally MUST be reproducible by any person from the published ballots.
 
-⁵ The tally is performed by the published tool, and the tool's result is the result.
+⁵ The tally is performed by the published tool, and the tool's result is the result. A record of a tally that the tool does not reproduce is of no effect.
+
+⁶ Where the ballots and a recorded result disagree, the ballots govern.
 
 ## § 5  Enactment
 

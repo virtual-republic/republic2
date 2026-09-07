@@ -261,11 +261,27 @@ await check('shares transfer', () => {
   const r = run('settle');
   return r.out.includes('300 \u00d7 e-0001:ordinary') || r.out;
 });
-await check('the exchange clears at a uniform price', () => {
-  run('order', '--side', 'sell', '--instrument', 'e-0001:ordinary', '--quantity', '100', '--price', '20', '--by', 'c-0001', '--account', 'e-0001');
-  run('order', '--side', 'buy', '--instrument', 'e-0001:ordinary', '--quantity', '80', '--price', '25', '--by', 'c-0001', '--account', 'c-0001');
+// art-10/§5 — best price first, then time; the trade happens at the RESTING
+// order's price; and an order partly filled is cancelled for the remainder.
+await check('an order that crosses nothing rests', () => {
+  run('order', '--side', 'sell', '--instrument', 'e-0001:ordinary', '--quantity', '30', '--price', '20', '--by', 'c-0001', '--account', 'e-0001');
   const r = run('settle');
-  return r.out.includes('cleared 80 at 20') || r.out;
+  return r.out.includes('rest') || r.out;
+});
+let lastSettle = '';
+await check('a crossing order trades at the resting price', () => {
+  run('order', '--side', 'buy', '--instrument', 'e-0001:ordinary', '--quantity', '20', '--price', '25', '--by', 'c-0001', '--account', 'c-0001');
+  const r = run('settle');
+  lastSettle = r.out;
+  return (r.out.includes('20 \u00d7 e-0001:ordinary at 20') && r.out.includes('resting sell')) || r.out;
+});
+await check('a partial fill cancels the remainder', () => {
+  const cancelled = run('value').out;
+  return /10 of 30 cancelled/.test(lastSettle) || lastSettle;
+});
+await check('nothing is left resting afterwards', () => {
+  const r = run('settle');
+  return r.out.includes('Nothing pending') || r.out;
 });
 
 console.log('\nContracts\n');
@@ -294,6 +310,67 @@ await check('an alteration after signature voids every signature', () => {
   const r = run('settle');
   return r.out.includes('changed after') || r.out;
 });
+
+console.log('\nDeeds\n');
+
+await check('anyone may ask for a deed', () => {
+  run('deed', 'request', '--id', 'river-mill', '--title', 'The mill at the river', '--by', 'c-0004', '--transferable');
+  const r = run('settle');
+  return r.out.includes('asks the Keeper') || r.out;
+});
+await check('a request is not a deed', () => {
+  const r = run('deed', 'list');
+  return (!r.out.includes('Recognised \u2014 valid') && r.out.includes('Requested')) || `a mere request appeared as valid:\n${r.out}`;
+});
+await check('only the holder of deed.recognise may recognise one', () => {
+  run('deed', 'recognise', '--id', 'river-mill', '--by', 'c-0004');
+  const r = run('settle');
+  return r.out.includes('may recognise a deed') || r.out;
+});
+await check('the Keeper recognises it, and it is published', () => {
+  run('deed', 'recognise', '--id', 'river-mill', '--by', 'c-0001');
+  const r = run('settle');
+  if (!r.out.includes('recognised and published')) return r.out;
+  const d = read('journal/deeds/river-mill.md');
+  const issue = (d.match(/journal: (\d+)/) || [])[1];
+  if (!issue) return 'no Journal issue recorded';
+  const year = new Date().getFullYear();
+  const files = fs.readdirSync(path.join(DIR, `journal/issues/${year}`));
+  return files.some((f) => f.startsWith(String(issue).padStart(4, '0'))) || `Journal ${issue} was not written`;
+});
+await check('a recognised deed is citable', () => {
+  const r = run('build');
+  return has('dist/journal/deeds/river-mill/index.html') || r.out;
+});
+await check('the holder may transfer a transferable deed', () => {
+  run('deed', 'transfer', '--id', 'river-mill', '--to', 'c-0001', '--by', 'c-0004');
+  const r = run('settle');
+  return r.out.includes('passes to c-0001') || r.out;
+});
+await check('someone who does not hold it may not transfer it', () => {
+  run('deed', 'transfer', '--id', 'river-mill', '--to', 'c-0005', '--by', 'c-0004');
+  const r = run('settle');
+  return r.out.includes('does not hold') || r.out;
+});
+await check('a deed that is not transferable cannot be transferred', () => {
+  run('deed', 'recognise', '--id', 'seat', '--title', 'A seat', '--holder', 'c-0004', '--by', 'c-0001');
+  run('settle');
+  run('deed', 'transfer', '--id', 'seat', '--to', 'c-0001', '--by', 'c-0004');
+  const r = run('settle');
+  return r.out.includes('not transferable') || r.out;
+});
+await check('the Keeper may recognise one directly, with no request', () => {
+  const d = read('journal/deeds/seat.md');
+  return d.includes('recognised_directly: true') || d;
+});
+await check('the Keeper may refuse a request, with reasons', () => {
+  run('deed', 'request', '--id', 'the-moon', '--title', 'The moon', '--by', 'c-0004');
+  run('settle');
+  run('deed', 'refuse', '--id', 'the-moon', '--by', 'c-0001', '--reasons', 'The Republic holds no territory.');
+  const r = run('settle');
+  return r.out.includes('is refused') || r.out;
+});
+await check('a refused request confers nothing', () => !has('journal/deeds/the-moon.md') || 'a refused request became a deed');
 
 console.log('\nThe Court\n');
 

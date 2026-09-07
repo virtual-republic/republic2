@@ -69,44 +69,70 @@ export function mayActFor(root, citizenId, account) {
   return !!e && (e.organs || []).some((o) => (o.held_by || []).includes(citizenId));
 }
 
-// art-10/§5/¶2 — the price that trades the most, and everyone trades at it.
-export function clearingPrice(orders) {
-  const bids = orders.filter((o) => o.side === 'buy').sort((a, b) => b.price - a.price);
-  const asks = orders.filter((o) => o.side === 'sell').sort((a, b) => a.price - b.price);
-  if (!bids.length || !asks.length) return null;
+// Matching, by price then time.
+//
+//   art-10/§5/¶2  the method is fixed by statute, and treats every order alike
+//                 according to its stated terms
+//   art-10/§5/¶3  no order is given precedence on any other ground
+//
+// Best price first; among equal prices, whoever arrived first. A trade happens
+// at the RESTING order's price — the one who waited set the terms, and the one
+// who crossed the spread accepted them.
+//
+// An order partly filled is cancelled for the remainder. Nobody is left holding
+// a position they did not choose to keep, and an order means what it says or
+// nothing.
 
-  let best = null;
-  for (const p of [...new Set(orders.map((o) => o.price))].sort((a, b) => a - b)) {
-    const demand = bids.filter((o) => o.price >= p).reduce((s, o) => s + o.quantity, 0);
-    const supply = asks.filter((o) => o.price <= p).reduce((s, o) => s + o.quantity, 0);
-    const volume = Math.min(demand, supply);
-    if (!best || volume > best.volume) best = { price: p, volume };
-  }
-  return best && best.volume ? best : null;
-}
+const byTime = (a, b) => String(a.at).localeCompare(String(b.at));
 
-export function matchAuction(orders) {
-  const cleared = clearingPrice(orders);
-  if (!cleared) return { cleared: null, fills: [] };
-
-  const buyers = orders.filter((o) => o.side === 'buy' && o.price >= cleared.price).sort((a, b) => b.price - a.price);
-  const sellers = orders.filter((o) => o.side === 'sell' && o.price <= cleared.price).sort((a, b) => a.price - b.price);
+export function matchBook(orders, { tradeAt = 'resting', cancelRemainder = true } = {}) {
+  const book = orders.map((o) => ({ ...o, filled: 0 }));
+  const bids = book.filter((o) => o.side === 'buy').sort((a, b) => b.price - a.price || byTime(a, b));
+  const asks = book.filter((o) => o.side === 'sell').sort((a, b) => a.price - b.price || byTime(a, b));
 
   const fills = [];
-  const taken = new Map();
-  const left = (o) => o.quantity - (taken.get(o) || 0);
-  let remaining = cleared.volume, bi = 0, si = 0;
+  const left = (o) => o.quantity - o.filled;
 
-  while (remaining > 0 && bi < buyers.length && si < sellers.length) {
-    const b = buyers[bi], s = sellers[si];
-    const q = Math.min(left(b), left(s), remaining);
-    if (q <= 0) break;
-    fills.push({ buyer: b.account, seller: s.account, quantity: q, price: cleared.price });
-    taken.set(b, (taken.get(b) || 0) + q);
-    taken.set(s, (taken.get(s) || 0) + q);
-    remaining -= q;
+  let bi = 0, si = 0;
+  while (bi < bids.length && si < asks.length) {
+    const b = bids[bi], a = asks[si];
+    if (b.price < a.price) break;                       // the spread has not crossed
+    if (b.account === a.account) {                      // nobody trades with themselves
+      if (left(b) <= left(a)) bi++; else si++;
+      continue;
+    }
+
+    // The resting order is whichever arrived first, and its price is the price.
+    const resting = byTime(a, b) <= 0 ? a : b;
+    const price = tradeAt === 'resting' ? resting.price : (a.price + b.price) / 2;
+    const quantity = Math.min(left(b), left(a));
+
+    fills.push({ buyer: b.account, seller: a.account, quantity, price, instrument: a.instrument, resting: resting.side });
+    b.filled += quantity;
+    a.filled += quantity;
+
     if (!left(b)) bi++;
-    if (!left(s)) si++;
+    if (!left(a)) si++;
+
+    // A partial fill ends the order. Both sides are then done, whatever remains.
+    if (cancelRemainder) {
+      if (left(b) && b.filled) bi++;
+      if (left(a) && a.filled) si++;
+    }
   }
-  return { cleared, fills };
+
+  const cancelled = book.filter((o) => o.filled > 0 && left(o) > 0 && cancelRemainder)
+    .map((o) => ({ ...o, remainder: left(o) }));
+  const filled = book.filter((o) => o.filled > 0 && !left(o));
+  const resting = book.filter((o) => o.filled === 0);
+
+  return { fills, cancelled, filled, resting };
+}
+
+// What the book looks like, for publication before it clears — art-10/§5/¶4.
+export function bookOf(orders) {
+  const bids = orders.filter((o) => o.side === 'buy').sort((a, b) => b.price - a.price || byTime(a, b));
+  const asks = orders.filter((o) => o.side === 'sell').sort((a, b) => a.price - b.price || byTime(a, b));
+  const spread = bids.length && asks.length ? asks[0].price - bids[0].price : null;
+  return { bids, asks, best: { bid: bids[0]?.price ?? null, ask: asks[0]?.price ?? null }, spread };
 }

@@ -132,6 +132,45 @@ in minutes rather than waiting out a week.
 To do it yourself: `republic close`, or `republic count P-0001` to see where a
 measure stands without closing it.
 
+### Revise a law
+
+**Site.** Open the statute under **Journal → Law** and press *Propose a
+revision*. You get an editor holding the text in force, and:
+
+* **new §** inserts the next section, numbered for you.
+* **new ¶** inserts the next paragraph mark in the section your cursor is in.
+  Marks are renumbered when you preview, so pasting and reordering cannot leave
+  gaps — every paragraph stays separately addressable under Article 2 § 4 ¹.
+* **insert a citation** opens the picker described below.
+* **see the changes** shows the diff before you propose it.
+
+*Prepare the measure* produces a revision — a measure like any other, which goes
+to a vote. Until it carries, the text in force is unchanged.
+
+Its page renders the change **line by line**, each located by § and ¶: struck
+lines in red with a rule through them, new lines in green, an alteration shown
+as both. Unchanged text is elided.
+
+**Terminal.**
+```bash
+republic propose --title "Statute on Meetings" --by c-0001 --class policy \
+  --revises statute-on-meetings --cites art-01/§4/¶2 --text "$(cat revised.md)"
+```
+
+### Citing something
+
+Type a citation and it links itself. `const.art-05/§2/¶4`, `stat.obol-issuance/§1/¶2`,
+`stat.one`, `deed.river-mill` — all resolve, in a measure, a case, a charter or
+a Journal issue.
+
+If you would rather not remember whether the Assembly is Article 6 § 2 or § 3,
+use **insert a citation**: choose the body of law, then the text, then the § and
+the ¶. It reads the same index that resolves citations, so anything it offers is
+guaranteed to resolve. A whole statute, a section, or a single paragraph.
+
+> Notwithstanding stat.obol-issuance/§1/¶2, stat.updates-new/§5, stat.one, and
+> const.art-05/§2/¶4, …
+
 ### Reading the law
 
 **Journal** holds four things, matching the directories on disk: the
@@ -295,35 +334,40 @@ republic order --side sell --instrument e-0001:ordinary --quantity 200 --price 2
 republic order --side buy  --instrument e-0001:ordinary --quantity 150 --price 25 --by c-0002
 ```
 
+**Exchange** is in the header.
+
 ### How the market behaves
 
-**It is not an order book, and there are no market orders.** Article 10 § 5 ²
-requires a periodic auction at a uniform price, with no priority to the order of
-arrival. So:
+**Price, then time. There are no market orders — every price is a limit.**
 
-* An order does not execute when you place it. It joins the book and waits.
-* At settlement the engine finds the price that trades the most volume.
-* **Everyone who trades, trades at that one price** — whatever they offered.
-* Arriving first buys you nothing. Arriving last costs you nothing.
+* An order that crosses nothing **rests** on the book until something does.
+* Best price first; among equal prices, whoever arrived first.
+* A trade happens at the **resting order's** price. The one who waited set the
+  terms; the one who crossed the spread accepted them.
+* **An order matched in part is cancelled for the remainder.** Nothing is left
+  half-alive, and an order means what it says or nothing.
+* An order is never matched against another order of the same account.
 
-Every price is a limit. To behave like a market order, name a price far beyond
-where you expect it to clear: you will trade at the clearing price, not yours.
-A buy at 1000 against asks at 20 fills at 20.
+To behave like a market order, name a price far past where you expect to trade.
+You pay the resting price, not yours: a buy at 1000 against a resting ask at 20
+fills at 20.
 
-The site publishes the book, the last traded price, and **what the next auction
-would clear at**, computed with the same code that will run it — Article
-10 § 5 ³.
+The site publishes the book, the best bid and ask, the spread, and **what the
+next settlement would do** — computed with the same code that will run it
+(Article 10 § 5 ⁴). Cancellations are published too.
 
-**Worked example.** Asks on the book: `10 @ 19.9` from c-0001, `200 @ 20` from
+**Worked example.** Asks resting: `10 @ 19.9` from c-0001, then `200 @ 20` from
 e-0001.
 
-*Bid 10 @ 19.95* → clears **10 at 19.9**. You pay 199 having offered 199.50; the
-lower price trades the same volume, so the lower price wins and the buyer keeps
-the difference.
+*Bid 10 @ 19.95* → trades **10 at 19.9**, the resting ask's price. You offered
+19.95 and pay 19.9.
 
-*Bid 15 @ 20.05* → clears **15 at 20**. You take all 10 of the cheap ask and 5
-of the dearer one, but **both sellers receive 20** — c-0001 asked 19.9 and gets
-20. One price for everyone, in both directions.
+*Bid 15 @ 20.05* → trades **10 at 19.9** against the best ask — and then stops.
+The remaining 5 is **cancelled**, not carried up to the 200 @ 20. A partial fill
+ends the order.
+
+That last case is the one to hold in mind: sizing an order larger than the best
+resting order means the excess dies rather than walking the book.
 
 ---
 
@@ -344,6 +388,73 @@ Article 9 § 7 — it takes effect when **every** party has signed, and not befo
 A signature covers the SHA-256 of the text as it then stood, so altering it
 afterwards voids every signature given. That is enforced at settlement, not
 merely stated.
+
+---
+
+## Deeds
+
+A deed is **recognised title** — to property, a claim, a right, a licence, a
+membership. It is valid only when the Keeper of the Journal has recognised it
+**and** it is published in the Journal. Recognition and publication are one act,
+so neither happens without the other.
+
+### Ask for one
+
+**Site.** **Journal** → **Deeds** → *Ask for a deed*. Say what is claimed, its
+kind, who is to hold it, and whether it may be passed on.
+
+**Terminal.**
+```bash
+republic deed request --id river-mill --title "The mill at the river" \
+  --by c-0002 --kind property --transferable
+```
+
+A request confers **nothing**. It is not a deed and does not appear among them;
+it sits under *Requested* until the Keeper decides.
+
+### Recognise or refuse
+
+Only the holder of `deed.recognise` — the Keeper — and nobody else. Anyone else
+signing a recognition is refused by name at settlement.
+
+**Site.** The same page shows a *Recognise or refuse* console, but only when the
+loaded key is the Keeper's.
+
+**Terminal.**
+```bash
+republic deed recognise --id river-mill --by c-0001
+republic deed refuse --id the-moon --by c-0001 --reasons "The Republic holds no territory."
+```
+
+The Keeper may also recognise title **directly**, with no request behind it:
+
+```bash
+republic deed recognise --id seat-of-office --title "A seat that cannot be sold" \
+  --holder c-0002 --by c-0001
+```
+
+Recognition writes the deed **and** its Journal issue in the same act. The deed
+records which issue published it, and that issue is what makes it valid.
+
+### Transfer
+
+```bash
+republic deed transfer --id river-mill --to c-0001 --by c-0002
+```
+
+Only if the deed says it is transferable, and only by whoever currently holds
+it. A non-transferable deed offers no transfer control at all — the page says
+so instead. Every previous holder stays recorded on the deed.
+
+### Where they live
+
+`journal/deeds/` holds the recognised ones; `journal/deeds/requested/` holds
+requests and refusals. Each is citable as `deed.<id>`, resolving like any other
+citation.
+
+The gate exempts `journal/deeds/` from requiring a measure — recognition is the
+Keeper's act under Article 5 § 2, not the Assembly's. What constrains the Keeper
+is that every recognition is a published, signed, permanent record naming them.
 
 ---
 
