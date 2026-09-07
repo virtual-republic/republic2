@@ -33,6 +33,11 @@ node cli/republic.js build
 § 3 ⁴, and publishes the first issue of the Journal. Your key lands in
 `private/`, which is never committed. Save it — it *is* your citizenship.
 
+## The manual
+
+[MANUAL.md](MANUAL.md) walks through every feature twice — on the website and on
+the terminal — with the provision each rests on.
+
 ## Doing things
 
 ```bash

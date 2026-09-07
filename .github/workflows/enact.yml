@@ -22,21 +22,21 @@ jobs:
       - name: Who approves a change to the tools?
         run: node cli/republic.js approve --who
 
-      - name: Has the Keeper approved?
-        env: { GH_TOKEN: "${{ github.token }}" }
-        run: |
-          APPROVERS=$(gh api "repos/$GITHUB_REPOSITORY/pulls/${{ github.event.pull_request.number }}/reviews" \
-            --jq '[.[] | select(.state=="APPROVED") | .user.login] | join(",")' 2>/dev/null || echo "")
-          node cli/republic.js approve --approvers "$APPROVERS"
-
-      - name: Does this change require a measure, and did it carry?
+      # One check. It works out what class of measure this change needs, whether
+      # such a measure carried, whether it named this very change, and — only if
+      # a governed path was touched — whether the Keeper has approved.
+      - name: Is this change enacted?
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_REF: ${{ github.base_ref }}
-        run: node cli/republic.js gate --base "origin/${{ github.base_ref }}"
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APPROVERS=$(gh api "repos/$GITHUB_REPOSITORY/pulls/${{ github.event.pull_request.number }}/reviews" \
+            --jq '[.[] | select(.state=="APPROVED") | .user.login] | join(",")' 2>/dev/null || echo "")
+          node cli/republic.js gate --base "origin/${{ github.base_ref }}" --approvers "$APPROVERS"
 
       - name: The register must verify
         run: node cli/republic.js verify && node test/selftest.js

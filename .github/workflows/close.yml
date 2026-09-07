@@ -53,28 +53,23 @@ jobs:
           for d in $RECORDS; do [ -e "$d" ] && PRESENT="$PRESENT $d"; done
           git add -A -- $PRESENT
           git commit -m "close and enact (art-08/§3/¶5, art-08/§5/¶1)" || { echo "nothing to record"; exit 0; }
-          # close, settle and checkpoint all write to main and can race each
-          # other. Rebase onto whatever landed first; the ledger is append-only,
-          # so both sides are genuine records and doctor re-chains them.
+          # art-08/§7 — no change reaches main except through a measure the gate has
+          # judged. That applies to this workflow too. It opens a pull request and
+          # asks for it to merge when the checks pass; the gate lets it through
+          # because records are exempt by path, not because the workflow is
+          # trusted.
           git fetch origin main
-          if ! git rebase origin/main; then
+          git rebase origin/main || {
             git rebase --abort || true
-            git fetch origin main && git reset --soft origin/main
-            git add ledger/ 2>/dev/null || true
             node cli/republic.js doctor --repair || true
             node cli/republic.js verify || exit 1
-            git add -A && git commit -m "close, re-chained after a concurrent record" || true
-          fi
+          }
 
-          if git push origin HEAD:main; then
-            echo "recorded on main"
-          else
-            BR="close/$(date -u +%Y-%m-%d-%H%M)"
-            git branch "$BR" && git push -u origin "$BR"
-            gh pr create --title "Close and enact" --body-file "$RUNNER_TEMP/close.txt" --base main \
-              && gh pr merge "$BR" --squash --admin \
-              || echo "::warning::Could not record automatically. Open https://github.com/$GITHUB_REPOSITORY/pull/new/$BR"
-          fi
+          BR="close/$(date -u +%Y-%m-%d-%H%M%S)"
+          git branch "$BR" && git push -u origin "$BR"
+          gh pr create --title "Close and enact" --body-file "$RUNNER_TEMP/close.txt" --base main --head "$BR" \
+            && gh pr merge "$BR" --squash --auto \
+            || echo "::warning::Opened, but could not set it to merge automatically. Review and merge: https://github.com/$GITHUB_REPOSITORY/pulls"
 
       - if: always()
         run: cat "$RUNNER_TEMP/close.txt" >> $GITHUB_STEP_SUMMARY || true

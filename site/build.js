@@ -481,10 +481,27 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
     <tbody>${ents.map((e) => `<tr><td><a href="${u(`/register/${e.id}/`)}">${esc(e.id)}</a></td><td class="q">${esc(e.type)}</td><td>${esc(e.name)}</td><td class="q">${esc(e.status)}</td></tr>`).join('')}</tbody></table>`
     : '<p class="quiet">None yet. Any citizen may form one — art-04/§1/¶1.</p>'}
 
+    <h2>Your citizenship</h2>
+    <p data-mymsg class="quiet">Load a key to act on your own citizenship.</p>
+    <div data-mine hidden>
+      <label for="delegate">Delegate your vote to (blank to revoke)</label>
+      <input type="text" id="delegate" placeholder="c-0002">
+      <div class="row"><button data-act="delegate">Prepare</button></div>
+      <p class="quiet">art-08/§3/¶4 \u2014 a delegated vote is exercised openly and recorded as delegated. It is used only where you have not voted yourself, and you may revoke it before the close.</p>
+      <div class="row"><button data-act="depart" class="plain">Depart the Republic</button></div>
+      <p class="quiet">art-03/§4/¶1 \u2014 you may depart at any time, and return by the procedure for admission. Departure alters no record already made.</p>
+    </div>
+    <div data-out2 class="out" hidden></div>
+    <div class="row"><a data-commit2 class="button" hidden>Open on GitHub</a></div>
+
     <h2>Checkpoints</h2>
     <table><thead><tr><th>No.</th><th>Records</th><th>Root</th></tr></thead>
     <tbody>${checkpoints(root).slice().reverse().map((c) => `<tr><td>${c.number}</td><td class="q">${c.records}</td><td class="q">${esc(String(c.root).slice(0, 20))}…</td></tr>`).join('') || '<tr><td colspan="3" class="q">None yet.</td></tr>'}</tbody></table>`,
-    { on: 'register', module: 'register', data: { entities: cfg.entities, next: 'e-' + String(ents.reduce((n, e) => Math.max(n, Number(String(e.id).replace('e-', '')) || 0), 0) + 1).padStart(4, '0') } }));
+    { on: 'register', module: 'register', data: {
+      entities: cfg.entities,
+      next: 'e-' + String(ents.reduce((n, e) => Math.max(n, Number(String(e.id).replace('e-', '')) || 0), 0) + 1).padStart(4, '0'),
+      citizens: roll.map((c) => ({ id: c.id, status: c.status, admitted: asDate(c.admitted), keys: c.keys || [], delegate_to: c.delegate_to || null, github: c.github || null })),
+    } }));
 
   const instruments = [...V.instruments.entries()];
   fs.mkdirSync(path.join(OUT, 'data/charters'), { recursive: true });
@@ -643,6 +660,16 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
       </tr></tbody></table>`;
     }).join('') : '<p class="quiet">No instrument has been issued, so there is nothing to trade. A company may issue a share in itself — art-10/§4/¶1.</p>'}
 
+    <h2 data-issue-head hidden>Issue a share</h2>
+    <div data-issue hidden>
+      <p class="quiet">A company may issue an instrument representing a share in itself \u2014 art-10/§4/¶1. Only an organ of it may do so.</p>
+      <label for="ientity">Company</label><select id="ientity"></select>
+      <label for="icls">Class</label><input type="text" id="icls" value="ordinary">
+      <label for="iqty">Quantity</label><input type="text" id="iqty" inputmode="numeric">
+      <label for="ito">To</label><select id="ito"></select>
+      <div class="row"><button data-act="issue">Sign the issue</button></div>
+    </div>
+
     ${instruments.length ? `<h2>Place an order</h2>
     <p data-msg class="msg quiet"></p>
     <label for="oside">Side</label><select id="oside"><option value="buy">buy</option><option value="sell">sell</option></select>
@@ -666,6 +693,8 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
       || '<tr><td colspan="6" class="q">No trades yet.</td></tr>'}</tbody></table>`,
     { on: 'value', module: 'exchange', wide: true, data: {
       accounts: [...ACCT.entries()].map(([id, m]) => ({ id, kind: m.kind, organs: m.organs || [] })),
+      issuers: ents.filter((e) => e.status === 'active' && cfg.entities[e.type]?.instruments)
+        .map((e) => ({ id: e.id, name: e.name, organs: e.organs || [] })),
     } }));
 
   // Contracts
@@ -685,8 +714,21 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
   write('contracts', page('Contracts', `
     <h1>Contracts<span class="sub">Drafted by one party, executed when every party has signed — art-09/§7/¶2.</span></h1>
     <ul class="list">${contractList.length ? contractList.map((c) =>
-      `<li><a href="${u(`/contracts/${c.id}/`)}">${esc(c.title || c.id)}</a><span class="meta">${[].concat(c.parties || []).map((p) => esc(p) + (c.signed.includes(p) ? ' ✓' : ' —')).join('  ')}</span></li>`).join('')
-      : '<li class="quiet">None yet.</li>'}</ul>`, { on: 'value' }));
+      `<li><a href="${u(`/contracts/${c.id}/`)}">${esc(c.title || c.id)}</a><span class="meta">${[].concat(c.parties || []).map((p) => esc(p) + (c.signed.includes(p) ? ' \u2713' : ' \u2014')).join('  ')}</span></li>`).join('')
+      : '<li class="quiet">None yet.</li>'}</ul>
+
+    <h2>Draft a contract</h2>
+    <p data-msg class="msg quiet"></p>
+    <label for="ctitle">Title</label><input type="text" id="ctitle">
+    <label for="cparties">Parties, comma separated</label><input type="text" id="cparties" placeholder="c-0001, e-0001">
+    <label for="cterms">Terms</label><textarea id="cterms" rows="6"></textarea>
+    <div class="row"><button id="draft" disabled>Prepare</button><a data-commit class="button" hidden>Open on GitHub</a></div>
+    <div data-out class="out" hidden></div>
+    <p class="note">Each party then signs it on its own page. It takes effect when every one has \u2014 art-09/§7/¶2.</p>`,
+    { on: 'value', module: 'contracts', data: {
+      accounts: [...ACCT.keys()],
+      expiry: cfg.contracts.expiry,
+    } }));
 
   for (const c of contractList) {
     fs.writeFileSync(path.join(OUT, `data/contracts/${c.id}.txt`), c.source);

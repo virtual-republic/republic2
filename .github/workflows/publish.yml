@@ -11,6 +11,10 @@ on:
   workflow_run:
     workflows: [close, settle, checkpoint]
     types: [completed]
+  # and when their pull request lands
+  pull_request:
+    types: [closed]
+    branches: [main]
   workflow_dispatch:
 
 # Never cancel a deploy. The last one carries the current state of the
