@@ -1,0 +1,11 @@
+{
+  "kind": "instrument.transfer",
+  "from": "e-0001",
+  "to": "c-0001",
+  "instrument": "e-0001:ordinary",
+  "quantity": 50,
+  "by": "c-0001",
+  "at": "2026-09-07T05:29:57.516Z",
+  "salt": "2c7329a58ca213e6",
+  "signature": "-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgP75cSkD4zu2XN0RiWpZZInqtKj\noH98W2UnZexMYDkdwAAAAIcmVwdWJsaWMAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVk\nMjU1MTkAAABA3pFoGeh28LO6JlOpDVRAN5QNPi3YjX+6A5Fw0OqTFZIqKjvvRRzIsr4xqr\nGhEeHqZoSWDhz29vXorOfVBQG1CQ==\n-----END SSH SIGNATURE-----\n"
+}
