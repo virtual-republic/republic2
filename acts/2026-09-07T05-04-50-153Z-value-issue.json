@@ -1,0 +1,10 @@
+{
+  "kind": "value.issue",
+  "amount": 1000,
+  "to": "treasury",
+  "resolution": "P-0001",
+  "by": "c-0001",
+  "at": "2026-09-07T05:04:50.153Z",
+  "salt": "5e6691f5b0cce8bb",
+  "signature": "-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgP75cSkD4zu2XN0RiWpZZInqtKj\noH98W2UnZexMYDkdwAAAAIcmVwdWJsaWMAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVk\nMjU1MTkAAABAoADlDrHb5ZXi/L6nL4+4kluJRQiWUPw7GYj8oLxKxKHdZN7KNXIquWdiyA\nszHNIeeyYnt0GLUNV+Q0ZE+wt6DA==\n-----END SSH SIGNATURE-----\n"
+}
