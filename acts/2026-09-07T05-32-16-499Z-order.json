@@ -1,0 +1,12 @@
+{
+  "kind": "order",
+  "side": "sell",
+  "instrument": "e-0001:ordinary",
+  "quantity": 10,
+  "price": 19.9,
+  "account": "c-0001",
+  "by": "c-0001",
+  "at": "2026-09-07T05:32:16.499Z",
+  "salt": "351a05cc5e3443f8",
+  "signature": "-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgP75cSkD4zu2XN0RiWpZZInqtKj\noH98W2UnZexMYDkdwAAAAIcmVwdWJsaWMAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVk\nMjU1MTkAAABAzp5v/RU5KzZFpe7g9QL0mBNR3ZzBevkzVYsmpYnim/LFHNucy4flEgdIHQ\n1rq1QpJcA0N3zWtUEcoXNtDlGxDA==\n-----END SSH SIGNATURE-----\n"
+}
