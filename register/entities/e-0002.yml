@@ -1,0 +1,13 @@
+id: e-0002
+type: commune
+name: Bay Area Commune
+formed: 2026-09-07
+formed_by: c-0001
+under: art-04/§1/¶2
+measure: P-0002
+charter: charters/e-0002.md
+organs:
+  - name: convenor
+    held_by: [c-0001]
+members: [c-0001]
+status: active
