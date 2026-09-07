@@ -1,0 +1,10 @@
+{
+  "kind": "value.transfer",
+  "from": "treasury",
+  "to": "c-0001",
+  "amount": 500,
+  "by": "c-0001",
+  "at": "2026-09-07T05:22:02.563Z",
+  "salt": "470b1f228d8744d0",
+  "signature": "-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgP75cSkD4zu2XN0RiWpZZInqtKj\noH98W2UnZexMYDkdwAAAAIcmVwdWJsaWMAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVk\nMjU1MTkAAABAmtbaEa1D/Z20RTr6m/OomMKmmYijN1mo6+fxf/ru/xdOQjhyjnvio2/fMk\nYLD8Jq+1oGQosS9lSuCihCEII5Cg==\n-----END SSH SIGNATURE-----\n"
+}
