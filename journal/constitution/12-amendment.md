@@ -18,7 +18,7 @@ entrenched: true
 
 ² An amendment to an entrenched Article is a measure of the class of entrenched provision.
 
-³ Article 9 § 9 and Article 11 § 1 MUST NOT be amended so as to impede exit or division.
+³ Article 9 § 9, Article 9 § 10 and Article 11 § 1 MUST NOT be amended so as to impede exit, division, or the right to a reasoned decision.
 
 ## § 3  Version
 

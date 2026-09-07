@@ -2,7 +2,7 @@
 
 import { init, key, join, depart, office } from './founding.js';
 import { propose, vote, count_, enact, close, court } from './assembly.js';
-import { entityCmd, issue, pay, order, contract, settle, value, checkpoint, verifyCmd, doctor, gate, approve } from './republic-ops.js';
+import { entityCmd, issue, pay, order, contract, deed, settle, value, checkpoint, verifyCmd, doctor, gate, approve } from './republic-ops.js';
 import { build } from './site.js';
 
 export const commands = {
@@ -24,6 +24,7 @@ export const commands = {
   pay,
   order,
   contract,
+  deed,
   settle,
   value,
 

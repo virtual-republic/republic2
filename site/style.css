@@ -124,6 +124,24 @@ th { text-align: left; font-weight: 700; padding: 0.6rem 1.5rem 0.6rem 0; border
 td { padding: 0.6rem 1.5rem 0.6rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
 td.q, .q { color: var(--grey); }
 
+.diff { border-top: 1px solid var(--line); margin: 1.5rem 0 2.5rem; font-size: 0.9375em; }
+.diff .line { display: grid; grid-template-columns: 4.5rem 1.25rem minmax(0, 1fr); align-items: baseline;
+  border-bottom: 1px solid var(--line); padding: 0.35rem 0; }
+.diff .at { color: var(--grey); font-size: 0.875em; }
+.diff .sign { color: var(--grey); }
+.diff .t { white-space: pre-wrap; word-break: break-word; }
+.diff .now { background: #f2f6ef; }
+.diff .now .sign { color: #2f6b2f; }
+.diff .was { background: #faf0ef; color: var(--grey); }
+.diff .was .sign { color: var(--accent); }
+.diff .was .t { text-decoration: line-through; text-decoration-color: var(--line); }
+.diff .gap { color: var(--line); padding: 0.35rem 0 0.35rem 5.75rem; border-bottom: 1px solid var(--line); }
+
+.editorbar { display: flex; gap: 1.25rem; flex-wrap: wrap; margin: 1.5rem 0 0.5rem; }
+#rtext, #ntext { font-variant-numeric: tabular-nums; line-height: 1.7; }
+#citepicker { border-left: 1px solid var(--line); padding-left: 1.25rem; margin: 1.5rem 0; }
+.cited { display: inline-block; margin: 0.2rem 0.4rem 0.2rem 0; padding: 0.1rem 0.4rem; border: 1px solid var(--line); }
+
 /* ---- controls ----------------------------------------------------------- */
 
 label { display: block; color: var(--grey); margin: 1.5rem 0 0.4rem; }

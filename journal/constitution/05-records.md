@@ -40,3 +40,7 @@ title: Records and the Journal
 ³ The Republic SHALL NOT require permission, registration or identification to verify.
 
 ⁴ The tools are the procedure. A change to them is a change to what the Republic does, and is made only as Article 8 provides.
+
+⁵ Where a tool and a record disagree, the tool is run again and its result is recorded. A record is never altered to agree with a tool.
+
+⁶ Damage to the register arising from the mechanics of copying is not an alteration within the meaning of Article 2 § 2, and is repaired in the open, by a published act stating what was repaired.

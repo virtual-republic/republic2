@@ -24,6 +24,7 @@ export const CORPORA = {
   jour:  { label: 'Journal',      pathKey: 'issues',       href: (d) => `/journal/issues/${d.split('/')[1]}/` },
   jdgt:  { label: 'Judgment',     pathKey: 'judgments',    href: (d) => `/journal/court/${d.split('/')[1]}/` },
   prop:  { label: 'Measure',      pathKey: 'proposals',    href: (d) => `/assembly/${d}/` },
+  deed:  { label: 'Deed',         pathKey: 'deeds',        href: (d) => `/journal/deeds/${d}/` },
 };
 
 export const slug = (id) => id.replace(/§/g, 's').replace(/¶/g, 'p').replace(/\//g, '-');
@@ -71,7 +72,10 @@ function readAll(dir, ext = '.md') {
   const walk = (d) => {
     for (const f of fs.readdirSync(d).sort()) {
       const p = path.join(d, f);
-      if (f === 'superseded') continue;         // kept for the record, not in force
+      // Not in force: superseded texts, and requests the Keeper has not
+      // recognised. A request appearing among the deeds would be a deed nobody
+      // granted — art-05/§2/¶2.
+      if (f === 'superseded' || f === 'requested') continue;
       if (fs.statSync(p).isDirectory()) walk(p);
       else if (f.endsWith(ext) && f !== 'TEMPLATE.md') out.push({ path: p, src: fs.readFileSync(p, 'utf8') });
     }
@@ -137,6 +141,16 @@ export function corpus(root) {
   }
   judgments.sort((a, b) => (a.number || 0) - (b.number || 0));
 
+  // Deeds — recognised title, valid on publication
+  const deeds = [];
+  for (const d of readAll(at(root, 'deeds'))) {
+    const [meta, body] = frontmatter(d.src);
+    const deed = { ...meta, id: meta.id || path.basename(d.path, '.md'), recognised: isoDate(meta.recognised), body: body.trim(), path: d.path };
+    deeds.push(deed);
+    add(`deed.${deed.id}`, { corpus: 'deed', label: deed.title || deed.id, document: deed.id, kind: 'deed' });
+  }
+  deeds.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
   // Measures
   const measures = [];
   for (const d of readAll(at(root, 'proposals'))) {
@@ -150,7 +164,7 @@ export function corpus(root) {
   }
   measures.sort((a, b) => String(a.id).localeCompare(String(b.id)));
 
-  return { articles, statutes, issues, judgments, measures, entries };
+  return { articles, statutes, issues, judgments, measures, deeds, entries };
 }
 
 export const resolves = (entries, citation) => entries.has(normalise(citation));
