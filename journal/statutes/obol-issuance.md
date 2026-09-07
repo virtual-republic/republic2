@@ -12,4 +12,4 @@ cites:
 
 ## § 1
 
-¹ One thousand Obols shall be issued and the Treasurer may transfer them to persons.
+¹ One thousand Obols shall be issued and Treasurer may transfer them to persons.
