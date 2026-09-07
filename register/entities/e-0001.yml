@@ -1,0 +1,12 @@
+id: e-0001
+type: company
+name: Republic Co.
+formed: 2026-09-07
+formed_by: c-0001
+under: art-04/§1/¶1
+charter: charters/e-0001.md
+organs:
+  - name: convenor
+    held_by: [c-0001]
+members: [c-0001]
+status: active
