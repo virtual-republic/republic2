@@ -42,6 +42,19 @@ jobs:
           git config user.email "treasurer@users.noreply.github.com"
           git add ledger/ acts/ settled/ refused/ register/ charters/ contracts/ 2>/dev/null || true
           git commit -m "settle (art-10/§3/¶2, art-10/§5/¶2)"
+          # close, settle and checkpoint all write to main and can race each
+          # other. Rebase onto whatever landed first; the ledger is append-only,
+          # so both sides are genuine records and doctor re-chains them.
+          git fetch origin main
+          if ! git rebase origin/main; then
+            git rebase --abort || true
+            git fetch origin main && git reset --soft origin/main
+            git add ledger/ 2>/dev/null || true
+            node cli/republic.js doctor --repair || true
+            node cli/republic.js verify || exit 1
+            git add -A && git commit -m "settle, re-chained after a concurrent record" || true
+          fi
+
           if git push origin HEAD:main; then
             echo "recorded on main"
           else

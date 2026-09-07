@@ -13,7 +13,10 @@ on:
     types: [completed]
   workflow_dispatch:
 
-concurrency: { group: pages, cancel-in-progress: true }
+# Never cancel a deploy. The last one carries the current state of the
+# Republic, and cancelling it leaves the site showing something that is no
+# longer true.
+concurrency: { group: pages, cancel-in-progress: false }
 
 jobs:
   publish:

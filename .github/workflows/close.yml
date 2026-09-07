@@ -50,6 +50,19 @@ jobs:
           git config user.email "keeper@users.noreply.github.com"
           git add ballots/ ledger/ journal/ register/ 2>/dev/null || true
           git commit -m "close and enact (art-08/§3/¶5, art-08/§5/¶1)"
+          # close, settle and checkpoint all write to main and can race each
+          # other. Rebase onto whatever landed first; the ledger is append-only,
+          # so both sides are genuine records and doctor re-chains them.
+          git fetch origin main
+          if ! git rebase origin/main; then
+            git rebase --abort || true
+            git fetch origin main && git reset --soft origin/main
+            git add ledger/ 2>/dev/null || true
+            node cli/republic.js doctor --repair || true
+            node cli/republic.js verify || exit 1
+            git add -A && git commit -m "close, re-chained after a concurrent record" || true
+          fi
+
           if git push origin HEAD:main; then
             echo "recorded on main"
           else
