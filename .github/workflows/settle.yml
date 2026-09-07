@@ -26,10 +26,10 @@ jobs:
       - run: npm ci --omit=dev || npm install --omit=dev
 
       - name: What is pending?
-        run: node cli/republic.js settle --dry-run | tee pending.txt
+        run: node cli/republic.js settle --dry-run | tee "$RUNNER_TEMP/pending.txt"
 
       - name: Settle
-        run: node cli/republic.js settle | tee settle.txt
+        run: node cli/republic.js settle | tee "$RUNNER_TEMP/settle.txt"
 
       - name: The register must still verify
         run: node cli/republic.js verify
@@ -37,11 +37,14 @@ jobs:
       - name: Record it
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
-          if [ -z "$(git status --porcelain)" ]; then echo "nothing settled"; exit 0; fi
+          RECORDS="ledger acts settled refused register charters contracts"
+          if [ -z "$(git status --porcelain -- $RECORDS)" ]; then echo "nothing settled"; exit 0; fi
           git config user.name  "Treasurer"
           git config user.email "treasurer@users.noreply.github.com"
-          git add ledger/ acts/ settled/ refused/ register/ charters/ contracts/ 2>/dev/null || true
-          git commit -m "settle (art-10/§3/¶2, art-10/§5/¶2)"
+          PRESENT=""
+          for d in $RECORDS; do [ -e "$d" ] && PRESENT="$PRESENT $d"; done
+          git add -A -- $PRESENT
+          git commit -m "settle (art-10/§3/¶2, art-10/§5/¶2)" || { echo "nothing to record"; exit 0; }
           # close, settle and checkpoint all write to main and can race each
           # other. Rebase onto whatever landed first; the ledger is append-only,
           # so both sides are genuine records and doctor re-chains them.
@@ -60,10 +63,10 @@ jobs:
           else
             BR="settle/$(date -u +%Y-%m-%d-%H%M)"
             git branch "$BR" && git push -u origin "$BR"
-            gh pr create --title "Settlement" --body-file settle.txt --base main \
+            gh pr create --title "Settlement" --body-file "$RUNNER_TEMP/settle.txt" --base main \
               && gh pr merge "$BR" --squash --admin \
               || echo "::warning::Could not record automatically. Open https://github.com/$GITHUB_REPOSITORY/pull/new/$BR"
           fi
 
       - if: always()
-        run: cat settle.txt >> $GITHUB_STEP_SUMMARY || true
+        run: cat "$RUNNER_TEMP/settle.txt" >> $GITHUB_STEP_SUMMARY || true
