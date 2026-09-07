@@ -4,6 +4,13 @@ name: publish
 on:
   push:
     branches: [main]
+  # A push made with GITHUB_TOKEN does not trigger another workflow — GitHub
+  # blocks that to prevent recursion. So close and settle, which record results
+  # by pushing to main, would never cause the site to rebuild. This listens for
+  # them finishing instead.
+  workflow_run:
+    workflows: [close, settle, checkpoint]
+    types: [completed]
   workflow_dispatch:
 
 concurrency: { group: pages, cancel-in-progress: true }
