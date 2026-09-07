@@ -1,0 +1,77 @@
+# The Republic — every setting in one place.
+#
+# Nothing in core/ or cli/ hardcodes a value that appears here. A change to this
+# file is an act of the Assembly like any other; core/rules.js says which class.
+
+name: The Republic
+motto: By record and by consent
+founded: 2026-01-01
+
+# Where everything lives. Decided once, and never migrated.
+paths:
+  constitution: journal/constitution
+  statutes: journal/statutes
+  judgments: journal/judgments
+  issues: journal/issues
+  citizens: register/citizens
+  entities: register/entities
+  offices: register/offices.yml
+  keepers: register/keepers.txt
+  ledger: ledger/events.jsonl
+  proposals: proposals
+  ballots: ballots
+  acts: acts
+  settled: settled
+  refused: refused
+  checkpoints: checkpoints
+  charters: charters
+  contracts: contracts
+  private: private
+  dist: dist
+
+# Classes of measure. Quorum is a fraction of active citizenships; threshold a
+# fraction of decisive votes. art-08.
+classes:
+  policy:     { label: Policy,                    quorum: 0.20, threshold: 0.50,   window: 7 }
+  ordinary:   { label: Ordinary measure,          quorum: 0.20, threshold: 0.50,   window: 7 }
+  organic:    { label: Organic statute,           quorum: 0.33, threshold: 0.6667, window: 14 }
+  amendment:  { label: Constitutional amendment,  quorum: 0.50, threshold: 0.6667, window: 21, readings: 2, apart: 30 }
+  entrenched: { label: Entrenched provision,      quorum: 0.60, threshold: 0.75,   window: 30, readings: 2, apart: 30 }
+  election:   { label: Election,                  quorum: 0.33, method: irv,       window: 7 }
+
+ballot:
+  one_per_citizenship: true
+  allow_update: true
+  # art-08 — voting closes when waiting can no longer change the outcome.
+  close_early:
+    on_full_participation: true
+    on_determined_outcome: true
+    minimum_participation: 1.0
+
+offices:
+  registrar:  { title: Registrar,             powers: [citizen.admit, citizen.object, entity.register] }
+  keeper:     { title: Keeper of the Journal, powers: [journal.publish, checkpoint.sign, code.approve] }
+  treasurer:  { title: Treasurer,             powers: [value.issue, treasury.disburse] }
+  auditor:    { title: Auditor,               powers: [audit.report] }
+  judge:      { title: Judge of the Court,    powers: [court.halt, court.void, court.judge] }
+  term: 365
+
+entities:
+  association: { label: Association,           formed_by: citizen, account: true,  instruments: false }
+  company:     { label: Company,               formed_by: citizen, account: true,  instruments: true  }
+  foundation:  { label: Foundation,            formed_by: citizen, account: true,  instruments: false }
+  commune:     { label: Commune,               formed_by: law,     account: true,  instruments: false, entered_by: registrar }
+  organ:       { label: Organ of the Republic, formed_by: law,     account: true,  instruments: false, entered_by: registrar }
+
+value:
+  unit: obol
+  subunit: mina
+  issue_cap: 100000
+  exchange: uniform_price_auction
+
+contracts:
+  all_parties_must_sign: true
+  expiry: 30
+
+journal:
+  publish_on_enactment: true

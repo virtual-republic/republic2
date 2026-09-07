@@ -1,0 +1,26 @@
+# art-05/§1/¶2 — the site is a client of the repository, not the Republic.
+name: publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency: { group: pages, cancel-in-progress: true }
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions: { contents: read, pages: write, id-token: write }
+    environment: { name: github-pages, url: "${{ steps.deploy.outputs.page_url }}" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm ci --omit=dev || npm install --omit=dev
+      - run: node cli/republic.js verify
+      - run: node cli/republic.js build --base "${{ vars.BASE_PATH }}"
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: dist }
+      - id: deploy
+        uses: actions/deploy-pages@v4

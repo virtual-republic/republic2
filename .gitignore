@@ -1,0 +1,7 @@
+private/
+dist/
+node_modules/
+*.tar.gz
+.DS_Store
+ledger/events.jsonl.before-repair
+ledger/events.jsonl.with-conflict

@@ -1,0 +1,64 @@
+# art-08/§3/¶5 — voting closes at the earlier of the end of the period, or the
+# moment the outcome can no longer change.
+# art-08/§5/¶1 — a measure that carries is enacted by publication.
+#
+# A measure that can no longer move is decided, so this records the result
+# directly rather than waiting for anyone to merge it. Everything it writes is
+# a record, and core/rules.js exempts records from the vote requirement
+# precisely so that procedure can complete itself.
+name: close
+
+on:
+  push:
+    branches: [main]
+    paths: ['ballots/**']
+  schedule:
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+    inputs:
+      measure:
+        description: 'Measure to close. Blank for everything due.'
+        required: false
+
+concurrency: { group: close }
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    permissions: { contents: write, pull-requests: write }
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm ci --omit=dev || npm install --omit=dev
+
+      - name: What is due?
+        run: node cli/republic.js close ${{ inputs.measure }} --dry-run | tee due.txt
+
+      - name: Close and enact
+        run: node cli/republic.js close ${{ inputs.measure }} | tee close.txt
+
+      - name: The register must still verify
+        run: node cli/republic.js verify
+
+      - name: Record it
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then echo "nothing to record"; exit 0; fi
+          git config user.name  "Keeper of the Journal"
+          git config user.email "keeper@users.noreply.github.com"
+          git add ballots/ ledger/ journal/ register/ 2>/dev/null || true
+          git commit -m "close and enact (art-08/§3/¶5, art-08/§5/¶1)"
+          if git push origin HEAD:main; then
+            echo "recorded on main"
+          else
+            BR="close/$(date -u +%Y-%m-%d-%H%M)"
+            git branch "$BR" && git push -u origin "$BR"
+            gh pr create --title "Close and enact" --body-file close.txt --base main \
+              && gh pr merge "$BR" --squash --admin \
+              || echo "::warning::Could not record automatically. Open https://github.com/$GITHUB_REPOSITORY/pull/new/$BR"
+          fi
+
+      - if: always()
+        run: cat close.txt >> $GITHUB_STEP_SUMMARY || true

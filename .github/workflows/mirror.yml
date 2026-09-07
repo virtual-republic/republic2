@@ -1,0 +1,27 @@
+# art-05/§1/¶4 — the repository is kept on not fewer than two independent hosts.
+# A single host is a standing breach to remedy, not a reason to fail every push.
+name: mirror
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Push to the second host
+        env:
+          MIRROR_URL: ${{ secrets.MIRROR_URL }}
+          MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN }}
+        run: |
+          if [ -z "$MIRROR_URL" ]; then
+            echo "::warning::art-05/§1/¶4 requires the repository on not fewer than two independent hosts. No MIRROR_URL is set, so there is only one. Create the repository on a second forge and set the MIRROR_URL and MIRROR_TOKEN secrets."
+            exit 0
+          fi
+          git push --mirror "$(echo "$MIRROR_URL" | sed "s#://#://x-access-token:$MIRROR_TOKEN@#")"

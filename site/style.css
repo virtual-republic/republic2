@@ -1,0 +1,176 @@
+/* The Republic.
+   One typeface. Three sizes. No footer, no boxes, no badges, one accent.
+   Structure comes from space and a single rule, not from decoration. */
+
+:root {
+  --ink: #16150f;
+  --paper: #fcfbf7;
+  --grey: #7a766c;
+  --line: #ddd8cc;
+  --accent: #a01b1b;
+
+  --font: "Century Schoolbook", "New Century Schoolbook", "Century Schoolbook L", Georgia, "Times New Roman", serif;
+
+  --text: 1.0625rem;
+  --title: 2.5rem;
+  --subtitle: 1.5rem;
+
+  --pad: clamp(1.5rem, 5vw, 6rem);
+  --measure: 58rem;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: var(--text);
+  line-height: 1.6;
+  font-feature-settings: "kern" 1, "liga" 1;
+}
+
+a { color: inherit; text-decoration: none; }
+p { margin: 0 0 1.1em; }
+code { font-family: var(--font); font-size: 1em; letter-spacing: 0.01em; }
+
+/* ---- masthead ---------------------------------------------------------- */
+
+header.top {
+  display: flex; align-items: baseline; gap: 2rem; flex-wrap: wrap;
+  padding: 2rem var(--pad) 1.1rem;
+  border-bottom: 1px solid var(--ink);
+}
+header.top .name { font-weight: 700; letter-spacing: 0.02em; }
+header.top nav { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+header.top nav a { color: var(--grey); }
+header.top nav a:hover { color: var(--ink); }
+header.top nav a.on { color: var(--ink); border-bottom: 1px solid var(--accent); }
+header.top .who { margin-left: auto; color: var(--grey); }
+header.top .who a { border-bottom: 1px solid var(--line); }
+
+nav.sub {
+  display: flex; gap: 1.5rem; flex-wrap: wrap;
+  margin: 0 0 2.5rem; padding: 0 0 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+nav.sub a { color: var(--grey); }
+nav.sub a:hover { color: var(--ink); }
+nav.sub a.on { color: var(--ink); border-bottom: 1px solid var(--accent); padding-bottom: 0.2rem; }
+
+/* ---- layout ------------------------------------------------------------ */
+
+main { padding: 3.5rem var(--pad) 8rem; }
+main.narrow { max-width: var(--measure); }
+main > * { max-width: 100%; }
+
+h1 { font-size: var(--title); font-weight: 400; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 0.4em; }
+h1 .sub { display: block; font-size: var(--text); color: var(--grey); letter-spacing: 0; margin-top: 0.6rem; }
+
+h2 { font-size: var(--text); font-weight: 700; margin: 3.5rem 0 1rem; letter-spacing: 0.02em; }
+h2:first-child { margin-top: 0; }
+h3 { font-size: var(--text); font-weight: 700; margin: 2.5rem 0 0.75rem; }
+
+.lede { font-size: var(--subtitle); line-height: 1.45; max-width: 40ch; margin: 0 0 3rem; }
+.quiet { color: var(--grey); }
+.rule { border: 0; border-top: 1px solid var(--line); margin: 3rem 0; }
+.crumb { color: var(--grey); margin: 0 0 1.5rem; }
+.note { color: var(--grey); max-width: var(--measure); margin: 1.5rem 0; }
+
+/* ---- the law ----------------------------------------------------------- */
+
+article.law { max-width: var(--measure); }
+.sec { margin: 0 0 2.75rem; }
+.sec > h2 { margin: 0 0 1rem; display: flex; align-items: baseline; gap: 0.5rem; }
+.sec > h2 .n { color: var(--accent); font-weight: 400; }
+.sec > h2 a.anchor { margin-left: auto; color: var(--line); font-weight: 400; }
+.sec > h2 a.anchor:hover, .sec > h2 a.anchor.copied { color: var(--accent); }
+
+p.para { display: grid; grid-template-columns: 2rem minmax(0, 1fr); align-items: baseline; margin: 0 0 0.9em; }
+p.para .mark { color: var(--grey); font-size: 0.8125em; }
+a.mark:hover, a.mark.copied { color: var(--accent); }
+p.para .text { display: block; }
+
+a.cite { border-bottom: 1px solid var(--line); white-space: nowrap; }
+a.cite:hover { border-bottom-color: var(--accent); }
+
+article.law h3, article.law h4 { margin: 2rem 0 0.75rem; }
+ul.md, ol.md { margin: 0 0 1.1em 1.25rem; padding: 0; }
+ul.md li, ol.md li { margin: 0 0 0.35em; }
+blockquote { margin: 1.25rem 0; padding-left: 1.25rem; border-left: 1px solid var(--line); color: var(--grey); }
+strong { font-weight: 700; }
+em { font-style: italic; }
+
+/* ---- lists and tables --------------------------------------------------- */
+
+ul.list { list-style: none; margin: 0; padding: 0; max-width: var(--measure); }
+ul.list li { padding: 0.7rem 0; border-bottom: 1px solid var(--line); display: flex; gap: 1rem; align-items: baseline; }
+ul.list li:first-child { border-top: 1px solid var(--line); }
+ul.list .meta { margin-left: auto; color: var(--grey); white-space: nowrap; }
+ul.list a:hover { border-bottom: 1px solid var(--accent); }
+
+ol.contents { list-style: none; margin: 0; padding: 0; max-width: var(--measure); }
+ol.contents li { display: flex; gap: 1.25rem; align-items: baseline; padding: 0.7rem 0; border-bottom: 1px solid var(--line); }
+ol.contents li:first-child { border-top: 1px solid var(--ink); }
+ol.contents .n { color: var(--grey); min-width: 2.5rem; }
+ol.contents .meta { margin-left: auto; color: var(--grey); }
+ol.contents a:hover { color: var(--accent); }
+
+table { border-collapse: collapse; width: 100%; }
+main.narrow table { max-width: var(--measure); }
+th { text-align: left; font-weight: 700; padding: 0.6rem 1.5rem 0.6rem 0; border-bottom: 1px solid var(--ink); }
+td { padding: 0.6rem 1.5rem 0.6rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.q, .q { color: var(--grey); }
+
+/* ---- controls ----------------------------------------------------------- */
+
+label { display: block; color: var(--grey); margin: 1.5rem 0 0.4rem; }
+input, select, textarea {
+  width: 100%; max-width: var(--measure);
+  font-family: var(--font); font-size: var(--text); line-height: 1.5;
+  color: var(--ink); background: transparent;
+  border: 0; border-bottom: 1px solid var(--ink);
+  padding: 0.45rem 0; border-radius: 0;
+}
+textarea { resize: vertical; min-height: 5rem; }
+input:focus, select:focus, textarea:focus { outline: 0; border-bottom-color: var(--accent); }
+
+button, .button {
+  font-family: var(--font); font-size: var(--text); line-height: 1;
+  color: var(--ink); background: transparent;
+  border: 1px solid var(--ink); padding: 0.6rem 1.2rem;
+  cursor: pointer; border-radius: 0; display: inline-block;
+}
+button:hover, .button:hover { background: var(--ink); color: var(--paper); }
+button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+button:disabled { color: var(--line); border-color: var(--line); cursor: not-allowed; background: transparent; }
+button.plain { border: 0; padding: 0; color: var(--grey); text-decoration: underline; }
+button.plain:hover, button.plain.on { background: transparent; color: var(--accent); }
+
+.row { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin: 1.75rem 0; }
+.choices { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 1rem 0; }
+
+.out {
+  white-space: pre-wrap; word-break: break-all; color: var(--grey);
+  border-left: 1px solid var(--line); padding: 0.5rem 0 0.5rem 1rem;
+  margin: 1.5rem 0; max-height: 16rem; overflow: auto; font-size: 0.9375em;
+}
+pre.cmd {
+  white-space: pre-wrap; color: var(--grey); font-family: var(--font); font-size: 0.9375em;
+  border-left: 1px solid var(--line); padding: 0.5rem 0 0.5rem 1rem; margin: 1rem 0;
+}
+.msg { margin: 1rem 0; }
+.msg.bad { color: var(--accent); }
+
+.state { border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); padding: 0.9rem 0; margin: 0 0 2.5rem; max-width: var(--measure); }
+.state.failed { color: var(--accent); border-top-color: var(--accent); }
+
+@media (max-width: 48rem) {
+  :root { --title: 1.875rem; --subtitle: 1.25rem; }
+  header.top { gap: 1rem; padding-top: 1.5rem; }
+  header.top .who { margin-left: 0; width: 100%; }
+  main { padding-top: 2.5rem; }
+  p.para { grid-template-columns: 1.5rem minmax(0, 1fr); }
+}

@@ -1,0 +1,42 @@
+# art-08/§7 — a change to the tools, the settings or the procedure is a measure
+# of the class the settings fix for it, and takes effect only after the holder
+# of the power to approve confirms that what is being made effective is what
+# carried.
+name: enact
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  enact:
+    runs-on: ubuntu-latest
+    permissions: { contents: read, pull-requests: read }
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm ci --omit=dev || npm install --omit=dev
+
+      - name: Who approves a change to the tools?
+        run: node cli/republic.js approve --who
+
+      - name: Has the Keeper approved?
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          APPROVERS=$(gh api "repos/$GITHUB_REPOSITORY/pulls/${{ github.event.pull_request.number }}/reviews" \
+            --jq '[.[] | select(.state=="APPROVED") | .user.login] | join(",")' 2>/dev/null || echo "")
+          node cli/republic.js approve --approvers "$APPROVERS"
+
+      - name: Does this change require a measure, and did it carry?
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.base_ref }}
+        run: node cli/republic.js gate --base "origin/${{ github.base_ref }}"
+
+      - name: The register must verify
+        run: node cli/republic.js verify && node test/selftest.js

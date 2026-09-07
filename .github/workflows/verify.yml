@@ -1,0 +1,30 @@
+# art-05/§4 — the Republic publishes the tools by which its register may be
+# verified. This runs them on every change, so a claim about the register is
+# never taken on trust.
+name: verify
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '0 6 * * *'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm ci --omit=dev || npm install --omit=dev
+
+      - name: The register verifies
+        run: node cli/republic.js verify
+
+      - name: The doctor finds nothing wrong
+        run: node cli/republic.js doctor
+
+      # Every feature, end to end, in a scratch Republic. This is what stops a
+      # fix to one thing quietly breaking another.
+      - name: Self-test
+        run: node test/selftest.js

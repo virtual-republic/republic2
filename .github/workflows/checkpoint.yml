@@ -1,0 +1,35 @@
+# art-02/§3/¶2 — a signed checkpoint at intervals of not more than one week.
+name: checkpoint
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+jobs:
+  checkpoint:
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm ci --omit=dev || npm install --omit=dev
+      - run: node cli/republic.js verify
+
+      - name: Sign it
+        env: { KEEPER_KEY: "${{ secrets.KEEPER_KEY }}" }
+        run: |
+          if [ -z "$KEEPER_KEY" ]; then
+            echo "::warning::No KEEPER_KEY secret, so no checkpoint can be signed (art-02/§3/¶2). Add it in Settings → Secrets."
+            exit 0
+          fi
+          mkdir -p private && printf '%s' "$KEEPER_KEY" > private/keeper.pem
+          HOLDER=$(node -e "import('./core/registry.js').then(m=>console.log(m.holderOf(process.cwd(),'checkpoint.sign').holder))")
+          cp private/keeper.pem "private/$HOLDER.pem"
+          node cli/republic.js checkpoint
+          rm -f private/*.pem
+          git config user.name "Keeper of the Journal"
+          git config user.email "keeper@users.noreply.github.com"
+          git add checkpoints/ && git commit -m "checkpoint (art-02/§3/¶2)" && git push origin HEAD:main

@@ -1,0 +1,17 @@
+{
+  "name": "republic",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "CC0-1.0",
+  "bin": { "republic": "./cli/republic.js" },
+  "scripts": {
+    "republic": "node cli/republic.js",
+    "verify": "node cli/republic.js verify",
+    "doctor": "node cli/republic.js doctor",
+    "build": "node cli/republic.js build",
+    "test": "node test/selftest.js",
+    "selftest": "node test/selftest.js"
+  },
+  "dependencies": { "js-yaml": "^4.1.0" }
+}

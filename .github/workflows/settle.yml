@@ -1,0 +1,56 @@
+# Signed instruments are files until this runs. It verifies every signature,
+# checks every balance, clears the auction, and records the result. A refusal is
+# an outcome, not a failure — the instrument is set aside in refused/ with the
+# reason beside it.
+name: settle
+
+on:
+  push:
+    branches: [main]
+    paths: ['acts/**', 'contracts/**']
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+concurrency: { group: settle }
+
+jobs:
+  settle:
+    runs-on: ubuntu-latest
+    permissions: { contents: write, pull-requests: write }
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm ci --omit=dev || npm install --omit=dev
+
+      - name: What is pending?
+        run: node cli/republic.js settle --dry-run | tee pending.txt
+
+      - name: Settle
+        run: node cli/republic.js settle | tee settle.txt
+
+      - name: The register must still verify
+        run: node cli/republic.js verify
+
+      - name: Record it
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then echo "nothing settled"; exit 0; fi
+          git config user.name  "Treasurer"
+          git config user.email "treasurer@users.noreply.github.com"
+          git add ledger/ acts/ settled/ refused/ register/ charters/ contracts/ 2>/dev/null || true
+          git commit -m "settle (art-10/§3/¶2, art-10/§5/¶2)"
+          if git push origin HEAD:main; then
+            echo "recorded on main"
+          else
+            BR="settle/$(date -u +%Y-%m-%d-%H%M)"
+            git branch "$BR" && git push -u origin "$BR"
+            gh pr create --title "Settlement" --body-file settle.txt --base main \
+              && gh pr merge "$BR" --squash --admin \
+              || echo "::warning::Could not record automatically. Open https://github.com/$GITHUB_REPOSITORY/pull/new/$BR"
+          fi
+
+      - if: always()
+        run: cat settle.txt >> $GITHUB_STEP_SUMMARY || true

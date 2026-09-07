@@ -1,0 +1,37 @@
+# The gate runs on pull requests. A direct push to main never reaches it, and
+# GitHub cannot scope a ruleset bypass to particular paths — so the automation
+# that records ballots could, in principle, be used to push anything.
+#
+# This does not prevent that. It notices it. Detection, not prevention, is the
+# guarantee on offer throughout this design.
+name: audit
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions: { contents: read, issues: write }
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm ci --omit=dev || npm install --omit=dev
+
+      - id: gate
+        run: node cli/republic.js gate --after-the-fact | tee audit.txt
+        continue-on-error: true
+
+      - if: steps.gate.outcome == 'failure'
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          {
+            echo "A change landed on \`main\` without the measure it required."
+            echo; echo "Commit: ${{ github.sha }}"; echo "Pushed by: @${{ github.actor }}"; echo
+            echo '```'; cat audit.txt; echo '```'
+          } > body.md
+          gh issue create --title "Ungated change on main — ${{ github.sha }}" --body-file body.md
+          exit 1

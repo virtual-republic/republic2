@@ -1,0 +1,48 @@
+offices:
+  - id: registrar
+    title: Registrar
+    holder: c-0001
+    since: '2026-09-07'
+    term_ends: '2027-09-07'
+    under: art-06/§3/¶4
+    powers:
+      - citizen.admit
+      - citizen.object
+      - entity.register
+  - id: keeper
+    title: Keeper of the Journal
+    holder: c-0001
+    since: '2026-09-07'
+    term_ends: '2027-09-07'
+    under: art-06/§3/¶4
+    powers:
+      - journal.publish
+      - checkpoint.sign
+      - code.approve
+  - id: treasurer
+    title: Treasurer
+    holder: c-0001
+    since: '2026-09-07'
+    term_ends: '2027-09-07'
+    under: art-06/§3/¶4
+    powers:
+      - value.issue
+      - treasury.disburse
+  - id: auditor
+    title: Auditor
+    holder: c-0001
+    since: '2026-09-07'
+    term_ends: '2027-09-07'
+    under: art-06/§3/¶4
+    powers:
+      - audit.report
+  - id: judge
+    title: Judge of the Court
+    holder: c-0001
+    since: '2026-09-07'
+    term_ends: '2027-09-07'
+    under: art-06/§3/¶4
+    powers:
+      - court.halt
+      - court.void
+      - court.judge
