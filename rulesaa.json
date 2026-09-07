@@ -1,0 +1,44 @@
+{
+  "name": "main (stage one)",
+  "target": "branch",
+  "enforcement": "active",
+  "_note": [
+    "Stage one. Every change goes through a pull request \u2014 nobody pushes to main,",
+    "including the owner and the workflows.",
+    "",
+    "The status checks are deliberately NOT required yet. A required check that",
+    "breaks cannot be fixed, because the fix cannot merge either. Add them once a",
+    "few runs of verify and enact have gone green in a row: import",
+    "ruleset-main.json over this one.",
+    "",
+    "bypass_actors is empty in both stages. The workflows are not privileged; they",
+    "pass because records are exempt by path in core/rules.js."
+  ],
+  "bypass_actors": [],
+  "conditions": {
+    "ref_name": {
+      "include": [
+        "~DEFAULT_BRANCH"
+      ],
+      "exclude": []
+    }
+  },
+  "rules": [
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": true,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false
+      }
+    }
+  ]
+}
