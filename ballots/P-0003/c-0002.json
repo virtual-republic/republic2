@@ -1,0 +1,7 @@
+{
+  "measure": "P-0003",
+  "choice": "yes",
+  "at": "2026-09-08T04:05:48.509Z",
+  "salt": "ce2e8a65323ca4ef",
+  "signature": "-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgzlt5KcfvtQ+JXgTyCqEQWz9UCs\nl2RDPbNBj5WHAH3ncAAAAIcmVwdWJsaWMAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVk\nMjU1MTkAAABAtGrF/FPF1/nvu0I3j/k7jeYU6LvjJg/96fdV8ihzOG1J5b1MzfNct1uZq6\nQ7x1LIRZJ47wV4cUnBDdLrNrlyBw==\n-----END SSH SIGNATURE-----\n"
+}
