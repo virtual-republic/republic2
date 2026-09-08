@@ -14,6 +14,7 @@ import { citizens, active, citizen, entities, entity, offices, holderOf } from '
 import { state, accounts, mayActFor, TREASURY } from '../../core/value.js';
 import { writeAct, settle as runSettle, actMessage } from '../../core/acts.js';
 import { corpus, frontmatter } from '../../core/corpus.js';
+import { powersOf, charterOf, electorateOf, resolutions, resolution, countResolution } from '../../core/governance.js';
 import { tally, closesAt } from '../../core/tally.js';
 import { classOf } from '../../core/config.js';
 import { classify } from '../../core/rules.js';
@@ -41,6 +42,10 @@ export const entityCmd = {
   republic entity members --entity <e-0001> --admit a,b --by <c-0001>
   republic entity organs  --entity <e-0001> --set role=a/b --by <c-0001>
   republic entity dissolve --entity <e-0001> --by <c-0001>
+  republic entity powers --entity <e-0001>            what its charter allows
+  republic entity resolve --entity <e-0001> --title "..." --by <c-0001> [--kind policy|officer|charter] [--organ director]
+  republic entity vote --entity <e-0001> --resolution <R-0001> <yes|no|abstain|c-0002> --by <c-0001>
+  republic entity resolutions --entity <e-0001>
   republic entity list`,
   async run({ root, arg, positional }) {
     const [sub] = positional;
@@ -55,8 +60,19 @@ export const entityCmd = {
       return 0;
     }
 
+    // Reading what a charter allows asks nothing of anyone, so it needs no key.
+    const readOnly = ['powers', 'resolutions'].includes(sub);
     const by = arg('by');
-    if (!by) { console.error('--by <citizen> is required'); return 2; }
+    if (!by && !readOnly) { console.error('--by <citizen> is required'); return 2; }
+
+    if (readOnly) {
+      const rid = arg('entity');
+      if (!rid) { console.error('--entity <e-0001> is required'); return 2; }
+      const re = entity(root, rid);
+      if (!re) { console.error(`No entity ${rid}.`); return 1; }
+      if (sub === 'powers') return showPowers(root, rid, re);
+      return showResolutions(root, rid);
+    }
 
     if (sub === 'form') {
       const name = arg('name'), type = arg('type', 'association');
@@ -82,7 +98,7 @@ export const entityCmd = {
         // art-04/§3/¶1 — every entity has a charter. One created on the website
         // has none yet, because one commit creates one file.
         fs.mkdirSync(path.dirname(file), { recursive: true });
-        fs.writeFileSync(file, defaultCharter(e));
+        fs.writeFileSync(file, defaultCharter(root, e));
         console.log(`${id} had no charter — art-04/§3/¶1 says it must have one.`);
         console.log(`Written a default to:\n  ${file}`);
         console.log(`\nIt exists only on this machine until you commit it.`);
@@ -111,6 +127,32 @@ export const entityCmd = {
       return 0;
     }
 
+    if (sub === 'resolve') {
+      const title = arg('title');
+      if (!title) { console.error('--title says what is decided'); return 2; }
+      const kind = arg('kind', 'policy');
+      const existing = resolutions(root, id);
+      const rid = arg('resolution', 'R-' + String(existing.length + 1).padStart(4, '0'));
+      await offer(root, by, {
+        kind: 'entity.resolve', entity: id, resolution: rid, title,
+        resolutionKind: kind,
+        ...(arg('organ') ? { organ: arg('organ') } : {}),
+        ...(arg('candidates') ? { candidates: arg('candidates').split(',').map((x) => x.trim()) } : {}),
+        text: arg('text') || undefined,
+      });
+      const p = powersOf(root, id);
+      console.log(`\n  ${id} decides by ${p.vote === 'members' ? 'its members, one vote each' : 'its shares'}; quorum ${(p.quorum * 100).toFixed(0)}%, threshold ${(p.threshold * 100).toFixed(0)}%.`);
+      return 0;
+    }
+
+    if (sub === 'vote') {
+      const rid = arg('resolution');
+      const choice = positional[1];
+      if (!rid || !choice) { console.error('republic entity vote --entity <e-0001> --resolution <R-0001> <choice> --by <citizen>'); return 2; }
+      await offer(root, by, { kind: 'entity.vote', entity: id, resolution: rid, choice });
+      return 0;
+    }
+
     if (sub === 'dissolve') {
       await offer(root, by, { kind: 'entity.amend', entity: id, what: 'dissolve' });
       return 0;
@@ -121,14 +163,58 @@ export const entityCmd = {
   },
 };
 
-function defaultCharter(e) {
-  const organs = (e.organs || [{ name: 'convenor', held_by: [] }]);
+function showPowers(root, id, e) {
+  const p = powersOf(root, id);
+  const c = charterOf(root, id);
+  console.log(`${id} — ${e.name} (${p.type})\n`);
+  console.log(`  charter        ${c.missing ? 'MISSING — art-04/§3/¶1 requires one' : path.relative(root, c.file)}`);
+  console.log(`  may issue      ${p.instruments ? 'yes' : 'no'}`);
+  console.log(`  listed         ${p.listed ? 'yes — its instruments may be traded' : 'no — private; shares transfer directly, not on the exchange'}`);
+  console.log(`  votes by       ${p.vote === 'members' ? 'members, one each' : 'shares, weighted by holding'}`);
+  console.log(`  quorum         ${(p.quorum * 100).toFixed(0)}%`);
+  console.log(`  threshold      ${(p.threshold * 100).toFixed(0)}%`);
+  console.log(`  officer term   ${p.term} days`);
+  console.log(`\n  organs         ${(p.organs || []).map((o) => `${o.name}=${(o.held_by || []).join('/')}`).join(', ') || 'none'}`);
+  console.log(`  members        ${(p.members || []).join(', ') || 'none'}`);
+  const roll = electorateOf(root, id);
+  console.log(`\n  who may vote (${roll.length}):`);
+  for (const v of roll) console.log(`    ${v.id.padEnd(10)} weight ${v.weight}`);
+  if (!roll.length) console.log('    nobody yet');
+  return 0;
+}
+
+function showResolutions(root, id) {
+  const all = resolutions(root, id);
+  if (!all.length) { console.log(`No resolutions of ${id}.`); return 0; }
+  for (const r of all) {
+    const res = countResolution(root, r);
+    console.log(`  ${r.id}  ${r.title}`);
+    console.log(`      ${r.kind}${r.organ ? ' (' + r.organ + ')' : ''} · ${res.cast} of ${res.electorate} by ${res.vote}, ${res.quorumNeeded} needed · ${
+      res.open ? 'open until ' + r.closes : res.carried ? (res.winner ? 'carried — ' + res.winner : 'carried') : 'not carried'}`);
+  }
+  return 0;
+}
+
+function defaultCharter(root, e) {
+  const type = config(root).entities[e.type] || {};
+  const g = type.governance || {};
+  const organs = e.organs || [{ name: 'convenor', held_by: [] }];
   const marks = '¹²³⁴⁵⁶⁷⁸⁹';
+
+  // The front matter is read by the tools. It may narrow what the type allows
+  // and never widen it — art-04/§3/¶3.
+  const front = {
+    id: e.id, type: e.type, title: e.name, formed: e.formed,
+    ...(type.instruments ? { instruments: true, listed: type.listed_by_default ?? false } : {}),
+    governance: { vote: g.vote || 'members', quorum: g.quorum ?? 0.5, threshold: g.threshold ?? 0.5, term: g.term ?? 365 },
+  };
+
+  const votes = front.governance.vote === 'shares'
+    ? 'Each holder votes in proportion to the instruments they hold.'
+    : 'Each member has one vote, whatever they hold.';
+
   return `---
-id: ${e.id}
-type: ${e.type}
-title: ${e.name}
-formed: ${e.formed}
+${yaml.dump(front).trim()}
 ---
 
 ## § 1  Name and type
@@ -143,25 +229,47 @@ formed: ${e.formed}
 
 ## § 3  Membership
 
-¹ Membership is open to any citizen on application to an organ named in § 4.
+¹ Membership is open to any citizen on application to an organ named in § 5.
 
-² A member may withdraw at any time by a signed record.
+² ${front.governance.vote === 'members'
+    ? 'Every member is a coequal member. Admission confers the same standing as every other member holds, and no member has more.'
+    : 'Membership is by holding. A person who holds an instrument of the entity is a member to the extent of that holding.'}
 
-## § 4  Organs
+³ A member may withdraw at any time by a signed record.
 
-${organs.map((o, i) => `${marks[i] || i + 1} The ${o.name} is held by ${(o.held_by || []).join(', ') || 'no one at present'} and acts for the entity within the authority this charter confers.`).join('\n\n')}
+## § 4  Decisions
 
-## § 5  Decisions
+¹ ${votes}
 
-¹ The entity decides by a majority of its members, unless this charter provides otherwise.
+² A resolution carries when ${(front.governance.quorum * 100).toFixed(0)} per cent of the vote is cast and ${(front.governance.threshold * 100).toFixed(0)} per cent of the decisive votes are in favour.
 
-## § 6  Consistency
+³ These figures are those in the front matter of this charter, and the tools read them there. Altering them here without altering them there changes nothing.
+
+⁴ A resolution is proposed, voted and recorded like any other act of the Republic, and is published.
+
+## § 5  Organs
+
+${organs.map((o, i) => `${marks[i] || i + 1} The ${o.name} is held by ${(o.held_by || []).join(', ') || 'no one at present'}, and acts for the entity within the authority this charter confers and no further — Article 4 § 3 ².`).join('\n\n')}
+
+${marks[organs.length] || organs.length + 1} An organ is filled by a resolution of the kind "officer", and is held for ${front.governance.term} days.
+
+## § 6  Instruments
+
+¹ ${type.instruments
+    ? `The entity may issue instruments representing a share in itself — Article 10 § 4 ¹. It is ${front.listed ? 'listed: those instruments may be traded on the exchange' : 'NOT listed: its instruments exist and may be transferred directly, but are not traded on the exchange'}.`
+    : `A ${e.type} may not issue instruments — Article 4 § 2 ³. This charter cannot grant what the type withholds.`}
+
+² ${type.instruments ? 'Listing is changed by amending the "listed" field of this charter, which is a resolution of the kind "charter".' : ''}
+
+## § 7  Consistency
 
 ¹ This charter is subordinate to the Constitution, and any provision inconsistent with it is of no effect — Article 4 § 3 ³.
 
-## § 7  Dissolution
+² It may narrow what the entity's type allows. It may never widen it.
 
-¹ The entity is dissolved by this charter's procedure, by resolution of its members, or by judgment of the Court.
+## § 8  Dissolution
+
+¹ The entity is dissolved by resolution of its members, by the procedure in this charter, or by judgment of the Court.
 
 ² On dissolution its holdings pass to the Treasury, unless the resolution provides otherwise — Article 4 § 4 ².
 `;

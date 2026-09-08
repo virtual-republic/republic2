@@ -19,6 +19,7 @@ const KEEP = process.argv.includes('--keep');
 const DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'republic-'));
 
 let pass = 0, fail = 0;
+let society = null;
 const failures = [];
 
 const run = (...args) => {
@@ -189,17 +190,84 @@ await check('a non-organ may not act for the entity', () => {
   return r.out.includes('not an organ') || r.out;
 });
 
+console.log('\nEntity governance\n');
+
+await check('a charter is operative, not decoration', () => {
+  const r = run('entity', 'powers', '--entity', 'e-0001');
+  return (r.out.includes('may issue') && r.out.includes('votes by') && r.out.includes('who may vote')) || r.out;
+});
+await check('a company decides by its shares', () => {
+  const r = run('entity', 'powers', '--entity', 'e-0001');
+  return r.out.includes('shares, weighted by holding') || r.out;
+});
+await check('a company is private unless its charter lists it', () => {
+  const r = run('entity', 'powers', '--entity', 'e-0001');
+  return r.out.includes('private') || r.out;
+});
+await check('an unlisted company\u2019s shares are not traded', () => {
+  run('order', '--side', 'sell', '--instrument', 'e-0001:ordinary', '--quantity', '5', '--price', '5', '--by', 'c-0001', '--account', 'e-0001');
+  const r = run('settle');
+  return r.out.includes('not listed') || r.out;
+});
+await check('an association makes its members coequal', () => {
+  run('entity', 'form', '--name', 'The Society', '--type', 'association', '--by', 'c-0001', '--organ', 'convenor=c-0001');
+  run('settle');
+  const id = 'e-000' + fs.readdirSync(path.join(DIR, 'register/entities')).length;
+  run('entity', 'charter', '--entity', id, '--by', 'c-0001');
+  run('entity', 'charter', '--entity', id, '--by', 'c-0001');
+  run('settle');
+  run('entity', 'members', '--entity', id, '--admit', 'c-0004,c-0005', '--by', 'c-0001');
+  run('settle');
+  society = id;
+  const r = run('entity', 'powers', '--entity', id);
+  return (r.out.includes('members, one each') && (r.out.match(/weight 1/g) || []).length >= 3) || r.out;
+});
+await check('the members resolve, and it carries', () => {
+  run('entity', 'resolve', '--entity', society, '--title', 'Meet on Thursdays', '--by', 'c-0004');
+  run('settle');
+  for (const c of ['c-0001', 'c-0004', 'c-0005']) run('entity', 'vote', '--entity', society, '--resolution', 'R-0001', 'yes', '--by', c);
+  const r = run('settle');
+  return r.out.includes('R-0001 carried') || r.out;
+});
+await check('an officer resolution installs its winner as an organ', () => {
+  run('entity', 'resolve', '--entity', society, '--title', 'Convenor', '--kind', 'officer', '--organ', 'convenor', '--by', 'c-0001');
+  run('settle');
+  for (const c of ['c-0001', 'c-0004', 'c-0005']) run('entity', 'vote', '--entity', society, '--resolution', 'R-0002', 'c-0005', '--by', c);
+  const r = run('settle');
+  if (!r.out.includes('takes the convenor')) return r.out;
+  return read(`register/entities/${society}.yml`).includes('c-0005') || 'the organ was not filled';
+});
+await check('a stranger may not vote in an entity', () => {
+  run('key', 'new', 'c-0006'); run('join', 'private/c-0006.pem', 'c-0006');
+  run('entity', 'vote', '--entity', society, '--resolution', 'R-0001', 'yes', '--by', 'c-0006');
+  const r = run('settle');
+  return /not a member|holds no share/.test(r.out) || r.out;
+});
+
 console.log('\nValue\n');
 
+// Whoever is active when the measure is laid must vote, or it does not close
+// early — art-08/§3/¶6. Read the roll rather than assuming it.
+const activeNow = () => fs.readdirSync(path.join(DIR, 'register/citizens'))
+  .filter((f) => f.endsWith('.yml'))
+  .map((f) => f.replace('.yml', ''))
+  .filter((id) => read(`register/citizens/${id}.yml`).includes('status: active'));
+
+let issueMeasure = null;
+
 await check('a resolution authorising an issue carries', () => {
-  run('propose', '--title', 'First Issue', '--by', 'c-0001', '--class', 'ordinary', '--cites', 'art-10/§2/¶1',
-    '--text', '## § 1\n\n¹ The Treasurer is authorised to issue 50000 obols.\n');
-  for (const c of ['c-0001', 'c-0004', 'c-0005']) run('vote', 'P-0004', 'yes', '--by', c);
-  run('count', 'P-0004');
-  return run('enact', 'P-0004').out.includes('Enacted') || run('count', 'P-0004').out;
+  const p = run('propose', '--title', 'First Issue', '--by', 'c-0001', '--class', 'ordinary',
+    '--cites', 'art-10/§2/¶1', '--text', '## § 1\n\n¹ The Treasurer is authorised to issue 50000 obols.\n');
+  issueMeasure = (p.out.match(/Received (P-\d{4})/) || [])[1];
+  if (!issueMeasure) return p.out;
+  for (const c of activeNow()) run('vote', issueMeasure, 'yes', '--by', c);
+  run('count', issueMeasure);
+  const r = run('enact', issueMeasure);
+  return r.out.includes('Enacted') || r.out + run('count', issueMeasure).out;
 });
+
 await check('the Treasurer issues under it', () => {
-  run('issue', '--unit', '50000', '--under', 'P-0004', '--by', 'c-0001');
+  run('issue', '--unit', '50000', '--under', issueMeasure, '--by', 'c-0001');
   const r = run('settle');
   return r.out.includes('issued 50000') || r.out;
 });
@@ -209,12 +277,12 @@ await check('an issue under a measure that has not carried is refused', () => {
   return r.out.includes('has not been counted') || r.out;
 });
 await check('an issue by someone who does not hold the power is refused', () => {
-  run('issue', '--unit', '10', '--under', 'P-0004', '--by', 'c-0005');
+  run('issue', '--unit', '10', '--under', issueMeasure, '--by', 'c-0006');
   const r = run('settle');
   return r.out.includes('value.issue') || r.out;
 });
 await check('an issue above the cap is refused', () => {
-  run('issue', '--unit', '999999999', '--under', 'P-0004', '--by', 'c-0001');
+  run('issue', '--unit', '999999999', '--under', issueMeasure, '--by', 'c-0001');
   const r = run('settle');
   return r.out.includes('exceeds the cap') || r.out;
 });
@@ -263,6 +331,18 @@ await check('shares transfer', () => {
 });
 // art-10/§5 — best price first, then time; the trade happens at the RESTING
 // order's price; and an order partly filled is cancelled for the remainder.
+// A private company is the default. Listing is a decision of its holders,
+// taken by amending its own charter — art-04/§3/¶2.
+await check('the holders may list the company by amending the charter', () => {
+  const charter = read('charters/e-0001.md').replace('listed: false', 'listed: true');
+  run('entity', 'resolve', '--entity', 'e-0001', '--title', 'List the company', '--kind', 'charter', '--by', 'c-0001', '--text', charter);
+  run('settle');
+  run('entity', 'vote', '--entity', 'e-0001', '--resolution', 'R-0001', 'yes', '--by', 'c-0001');
+  const r = run('settle');
+  if (!r.out.includes('charter is amended')) return r.out;
+  return run('entity', 'powers', '--entity', 'e-0001').out.includes('may be traded') || 'still unlisted';
+});
+
 await check('an order that crosses nothing rests', () => {
   run('order', '--side', 'sell', '--instrument', 'e-0001:ordinary', '--quantity', '30', '--price', '20', '--by', 'c-0001', '--account', 'e-0001');
   const r = run('settle');
@@ -436,7 +516,7 @@ await check('a forged result cannot enact a law', () => {
 
 await check('a result that disagrees with the ballots is refused', () => {
   const id = forged;
-  for (const c of ['c-0001', 'c-0004', 'c-0005']) run('vote', id, 'yes', '--by', c);
+  for (const c of ['c-0001', 'c-0004', 'c-0005', 'c-0006']) run('vote', id, 'yes', '--by', c);
   run('count', id);
   const rf = `ballots/${id}/_result.json`;
   const claimed = JSON.parse(read(rf));
@@ -452,7 +532,7 @@ await check('a change backed by a real vote passes', () => {
   const p1 = run('propose', '--title', 'Honest', '--by', 'c-0001', '--class', 'policy', '--cites', 'art-01/§4/¶2');
   const id = (p1.out.match(/Received (P-\d{4})/) || [])[1];
   if (!id) return p1.out;
-  for (const c of ['c-0001', 'c-0004', 'c-0005']) run('vote', id, 'yes', '--by', c);
+  for (const c of ['c-0001', 'c-0004', 'c-0005', 'c-0006']) run('vote', id, 'yes', '--by', c);
   run('count', id);
   fs.appendFileSync(path.join(DIR, 'journal/statutes/forge-target.md'), '\n⁴ Properly enacted.\n');
   git('add', '-A'); git('commit', '-qm', 'honest');

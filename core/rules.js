@@ -17,6 +17,7 @@ export const RULES = [
   { re: /^register\/entities\//,         need: null, why: 'formation as of right, or by measure (art-04)' },
   { re: /^(acts|settled|refused)\//,     need: null, why: 'signed instruments and their settlement' },
   { re: /^(charters|contracts)\//,       need: null, why: 'instruments of an entity or between parties' },
+  { re: /^resolutions\//,                need: null, why: 'an entity deciding by its own charter (art-04/§3/¶2)' },
   { re: /^(README|SETUP|samples|test)/,  need: null, why: 'documentation and tests' },
   { re: /^private\//,                    need: null, why: 'never committed' },
 

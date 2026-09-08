@@ -17,7 +17,8 @@ import { append } from './ledger.js';
 import { verify } from './sshsig.js';
 import { citizen, entity, entities, offices, mayExercise, keysOf, writeOffices, asDate } from './registry.js';
 import { state, accounts, mayActFor, matchBook, TREASURY } from './value.js';
-import { corpus, frontmatter, isoDate } from './corpus.js';
+import { corpus, frontmatter, isoDate, parseSections } from './corpus.js';
+import { powersOf, charterOf, electorateOf, resolution, countResolution, writeResolutionResult, resolutionDir } from './governance.js';
 
 // The message an act signs: everything except the signature, canonically.
 export const actMessage = (act) => {
@@ -104,7 +105,8 @@ export const KINDS = {
     check(root, a) {
       const e = entity(root, a.issuer);
       if (!e) return `no entity ${a.issuer}`;
-      if (!config(root).entities[e.type]?.instruments) return `a ${e.type} may not issue instruments (art-04/§2/¶3)`;
+      const p = powersOf(root, a.issuer);
+      if (!p.instruments) return `${a.issuer} may not issue instruments — its ${config(root).entities[e.type]?.instruments ? 'charter withholds it' : 'type does not allow it'} (art-04/§2/¶3, art-04/§3/¶2)`;
       if (!mayActFor(root, a.by, a.issuer)) return `${a.by} is not an organ of ${a.issuer} (art-04/§3/¶4)`;
       if (!(a.quantity > 0)) return 'an issue must be a positive quantity';
       return null;
@@ -133,6 +135,11 @@ export const KINDS = {
       if (!accounts(root).has(a.account)) return `"${a.account}" is not an account`;
       if (!mayActFor(root, a.by, a.account)) return `${a.by} may not act for ${a.account}`;
       if (!['buy', 'sell'].includes(a.side)) return 'an order is a buy or a sell';
+      // A company may be private: its shares exist, and are not traded.
+      const issuer = String(a.instrument || '').split(':')[0];
+      if (entity(root, issuer) && !powersOf(root, issuer).listed) {
+        return `${issuer} is not listed — its charter does not permit its instruments to be traded (art-04/§3/¶2). They may still be transferred directly.`;
+      }
       if (!(a.quantity > 0) || !(a.price > 0)) return 'an order needs a positive quantity and price';
       return null;
     },
@@ -320,6 +327,65 @@ export const KINDS = {
     describe: (root, a) => `deed.${a.deed} passes to ${a.to}`,
   },
 
+  // art-04/§3 — an entity decides by its charter. A resolution is the entity's
+  // own measure: its members or its holders vote, weighed as the charter says.
+  'entity.resolve': {
+    provision: 'art-04/§3/¶2',
+    check(root, a) {
+      const e = entity(root, a.entity);
+      if (!e) return `no entity ${a.entity}`;
+      const roll = electorateOf(root, a.entity);
+      if (!roll.some((x) => x.id === a.by) && !mayActFor(root, a.by, a.entity)) {
+        return `${a.by} neither votes in ${a.entity} nor acts for it (art-04/§3/¶2)`;
+      }
+      if (!a.title) return 'a resolution states what it decides';
+      const kinds = config(root).resolutions.kinds;
+      if (a.resolutionKind && !kinds.includes(a.resolutionKind)) return `unknown kind "${a.resolutionKind}" — one of ${kinds.join(', ')}`;
+      if (a.resolutionKind === 'officer' && !a.organ) return 'an officer resolution names the organ to be filled';
+      if (resolution(root, a.entity, a.resolution)) return `${a.resolution} already exists`;
+      return null;
+    },
+    apply(root, a) {
+      const dir = resolutionDir(root, a.entity);
+      fs.mkdirSync(dir, { recursive: true });
+      const window = config(root).resolutions.window;
+      const closes = new Date(Date.now() + window * 86400000).toISOString().slice(0, 10);
+      fs.writeFileSync(path.join(dir, `${a.resolution}.md`), `---\n${yaml.dump({
+        id: a.resolution, entity: a.entity, title: a.title,
+        kind: a.resolutionKind || 'policy',
+        ...(a.organ ? { organ: a.organ } : {}),
+        ...(a.candidates ? { candidates: a.candidates } : {}),
+        proposed_by: a.by, opened: a.at.slice(0, 10), closes,
+      }).trim()}\n---\n\n${a.text || '## § 1\n\n¹ ' + a.title}\n`);
+      return { entity: a.entity, kind: 'resolution.proposed', payload: { entity: a.entity, resolution: a.resolution, kind: a.resolutionKind || 'policy', title: a.title, ...(a.organ ? { organ: a.organ } : {}) } };
+    },
+    describe: (root, a) => `${a.entity}: ${a.resolution} — ${a.title}`,
+  },
+
+  'entity.vote': {
+    provision: 'art-04/§3/¶2',
+    check(root, a) {
+      const r = resolution(root, a.entity, a.resolution);
+      if (!r) return `no resolution ${a.resolution} of ${a.entity}`;
+      const roll = electorateOf(root, a.entity);
+      const mine = roll.find((x) => x.id === a.by);
+      if (!mine) {
+        const p = powersOf(root, a.entity);
+        return p.vote === 'members' ? `${a.by} is not a member of ${a.entity}` : `${a.by} holds no share in ${a.entity}`;
+      }
+      if (r.kind === 'officer') { if (!a.choice) return 'name whom you are voting for'; }
+      else if (!['yes', 'no', 'abstain'].includes(a.choice)) return 'vote yes, no or abstain';
+      return null;
+    },
+    apply(root, a) {
+      const dir = path.join(resolutionDir(root, a.entity), a.resolution);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, `${a.by}.json`), JSON.stringify({ resolution: a.resolution, entity: a.entity, choice: a.choice, at: a.at }, null, 2));
+      return { entity: a.entity, kind: 'resolution.voted', payload: { entity: a.entity, resolution: a.resolution, by: a.by } };
+    },
+    describe: (root, a) => `${a.by} voted on ${a.resolution} of ${a.entity}`,
+  },
+
   'contract.sign': {
     provision: 'art-09/§7/¶2',
     check(root, a) {
@@ -436,6 +502,52 @@ export async function settle(root, { dry = false } = {}) {
 
     const gone = new Set([...filled, ...cancelled].map((o) => o._file));
     for (const o of book) if (gone.has(o._file)) done(o);
+  }
+
+  // ---- resolutions of entities -------------------------------------------
+  //
+  // Counted by the entity's own charter, and an officer resolution that carries
+  // installs its winner as an organ — art-04/§3/¶2.
+
+  for (const r of (await import('./governance.js')).resolutions(root)) {
+    const done0 = path.join(resolutionDir(root, r.entity), r.id, '_result.json');
+    const already = fs.existsSync(done0) ? JSON.parse(fs.readFileSync(done0, 'utf8')) : null;
+    if (already && !already.open) continue;
+
+    const result = countResolution(root, r);
+    if (result.open) continue;
+    if (!dry) writeResolutionResult(root, r, result);
+
+    if (!result.carried) {
+      applied.push({ what: `${r.entity}: ${r.id} did not carry (${result.cast} of ${result.electorate}, ${result.quorumNeeded} needed)` });
+      if (!dry) append(root, { at: new Date().toISOString(), author: r.proposed_by, entity: r.entity, kind: 'resolution.failed', provision: 'art-04/§3/¶2', payload: { entity: r.entity, resolution: r.id } });
+      continue;
+    }
+
+    if (r.kind === 'officer' && result.winner) {
+      const file = path.join(at(root, 'entities'), `${r.entity}.yml`);
+      const doc = yaml.load(fs.readFileSync(file, 'utf8'));
+      const organs = doc.organs || [];
+      const found = organs.find((o) => o.name === r.organ);
+      if (found) found.held_by = [result.winner];
+      else organs.push({ name: r.organ, held_by: [result.winner] });
+      doc.organs = organs;
+      if (!dry) fs.writeFileSync(file, yaml.dump(doc));
+      if (!dry) append(root, { at: new Date().toISOString(), author: result.winner, entity: r.entity, kind: 'organ.filled', provision: 'art-04/§3/¶2', payload: { entity: r.entity, organ: r.organ, holder: result.winner, resolution: r.id } });
+      applied.push({ what: `${r.entity}: ${result.winner} takes the ${r.organ} under ${r.id} — the charter confers its authority` });
+      continue;
+    }
+
+    if (r.kind === 'charter') {
+      const c = charterOf(root, r.entity);
+      if (!dry && c) { fs.mkdirSync(path.dirname(c.file), { recursive: true }); fs.writeFileSync(c.file, r.body + '\n'); }
+      if (!dry) append(root, { at: new Date().toISOString(), author: r.proposed_by, entity: r.entity, kind: 'charter.amended', provision: 'art-04/§3/¶1', payload: { entity: r.entity, resolution: r.id } });
+      applied.push({ what: `${r.entity}: the charter is amended by ${r.id}` });
+      continue;
+    }
+
+    if (!dry) append(root, { at: new Date().toISOString(), author: r.proposed_by, entity: r.entity, kind: 'resolution.carried', provision: 'art-04/§3/¶2', payload: { entity: r.entity, resolution: r.id, title: r.title } });
+    applied.push({ what: `${r.entity}: ${r.id} carried — ${r.title}` });
   }
 
   // ---- contracts ------------------------------------------------------------
