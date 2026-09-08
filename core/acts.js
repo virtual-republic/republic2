@@ -18,6 +18,7 @@ import { verify } from './sshsig.js';
 import { citizen, entity, entities, offices, mayExercise, keysOf, writeOffices, asDate } from './registry.js';
 import { state, accounts, mayActFor, matchBook, TREASURY } from './value.js';
 import { corpus, frontmatter, isoDate, parseSections } from './corpus.js';
+import { refuseUnused } from './vocabulary.js';
 import { powersOf, charterOf, electorateOf, resolution, countResolution, writeResolutionResult, resolutionDir } from './governance.js';
 
 // The message an act signs: everything except the signature, canonically.
@@ -71,6 +72,8 @@ export const KINDS = {
   'value.issue': {
     provision: 'art-10/§2/¶1',
     check(root, a) {
+      const off = refuseUnused(root, 'value', 'issuing the unit');
+      if (off) return off;
       if (!mayExercise(root, a.by, 'value.issue')) return `only the holder of value.issue may issue the unit (art-10/§2/¶1)`;
       if (!a.resolution) return 'an issue must cite the resolution that authorises it (art-10/§2/¶1)';
       const c = carried(root, a.resolution);
@@ -87,6 +90,8 @@ export const KINDS = {
   'value.transfer': {
     provision: 'art-10/§3/¶2',
     check(root, a) {
+      const off = refuseUnused(root, 'value', 'transferring the unit');
+      if (off) return off;
       const acct = accounts(root);
       if (!acct.has(a.from) || !acct.has(a.to)) return 'unknown account';
       if (a.from === a.to) return 'from and to are the same account';
@@ -103,6 +108,8 @@ export const KINDS = {
   'instrument.issue': {
     provision: 'art-10/§4/¶1',
     check(root, a) {
+      const off = refuseUnused(root, 'instruments', 'issuing a share');
+      if (off) return off;
       const e = entity(root, a.issuer);
       if (!e) return `no entity ${a.issuer}`;
       const p = powersOf(root, a.issuer);
@@ -118,6 +125,8 @@ export const KINDS = {
   'instrument.transfer': {
     provision: 'art-10/§4/¶2',
     check(root, a) {
+      const off = refuseUnused(root, 'instruments', 'transferring a share');
+      if (off) return off;
       const acct = accounts(root);
       if (!acct.has(a.from) || !acct.has(a.to)) return 'unknown account';
       if (!mayActFor(root, a.by, a.from)) return `${a.by} may not act for ${a.from}`;
@@ -132,6 +141,8 @@ export const KINDS = {
   'order': {
     provision: 'art-10/§5/¶1',
     check(root, a) {
+      const off = refuseUnused(root, 'exchange', 'the exchange');
+      if (off) return off;
       if (!accounts(root).has(a.account)) return `"${a.account}" is not an account`;
       if (!mayActFor(root, a.by, a.account)) return `${a.by} may not act for ${a.account}`;
       if (!['buy', 'sell'].includes(a.side)) return 'an order is a buy or a sell';
@@ -150,6 +161,8 @@ export const KINDS = {
   'entity.form': {
     provision: 'art-04/§1/¶1',
     check(root, a) {
+      const off = refuseUnused(root, 'entities', 'forming an entity');
+      if (off) return off;
       const spec = config(root).entities[a.type];
       if (!spec) return `unknown type "${a.type}"`;
       if (!citizen(root, a.by) || citizen(root, a.by).status !== 'active') return `${a.by} is not an active citizenship`;
@@ -184,6 +197,8 @@ export const KINDS = {
   'entity.amend': {
     provision: 'art-04/§3/¶2',
     check(root, a) {
+      const off = refuseUnused(root, 'entities', 'managing an entity');
+      if (off) return off;
       if (!entity(root, a.entity)) return `no entity ${a.entity}`;
       if (!mayActFor(root, a.by, a.entity)) return `${a.by} is not an organ of ${a.entity} (art-04/§3/¶4)`;
       if (!['charter', 'organs', 'members.admit', 'members.remove', 'dissolve'].includes(a.what)) return `unknown change "${a.what}"`;
@@ -218,6 +233,8 @@ export const KINDS = {
   'deed.request': {
     provision: 'art-05/§2/¶1',
     check(root, a) {
+      const off = refuseUnused(root, 'deeds', 'deeds');
+      if (off) return off;
       if (!citizen(root, a.by) || citizen(root, a.by).status !== 'active') return `${a.by} is not an active citizenship`;
       if (!a.title) return 'a request must state what is claimed';
       if (!accounts(root).has(a.holder || a.by)) return `"${a.holder || a.by}" is not an account`;
@@ -244,9 +261,17 @@ export const KINDS = {
   'deed.recognise': {
     provision: 'art-05/§2/¶2',
     check(root, a) {
+      const off = refuseUnused(root, 'deeds', 'deeds');
+      if (off) return off;
       if (!mayExercise(root, a.by, 'deed.recognise')) {
         const who = holderOfPower(root, 'deed.recognise');
-        return `only the ${who ? who.title : 'holder of deed.recognise'} may recognise a deed. That is ${who ? who.holder : 'nobody'}.`;
+        if (who) return `only the ${who.title} may recognise a deed. That is ${who.holder}.`;
+        // art-06/§4/¶1 — the register governs what an office may do. An office
+        // written before a power existed does not gain it by the settings
+        // changing; the grant has to be recorded.
+        return `no office on the register holds deed.recognise, so nobody may recognise a deed. `
+          + `The settings grant it to the Keeper, but the register was written before it existed. `
+          + `Run: republic office sync --apply`;
       }
       if (existingDeed(root, a.deed)) return `deed.${a.deed} is already recognised`;
       const req = requestedDeed(root, a.deed);
@@ -291,6 +316,8 @@ export const KINDS = {
   'deed.refuse': {
     provision: 'art-05/§2/¶1',
     check(root, a) {
+      const off = refuseUnused(root, 'deeds', 'deeds');
+      if (off) return off;
       if (!mayExercise(root, a.by, 'deed.recognise')) return 'only the holder of deed.recognise may refuse a request';
       if (!requestedDeed(root, a.deed)) return `no request for "${a.deed}"`;
       if (!a.reasons) return 'a refusal states its reasons';
@@ -309,6 +336,8 @@ export const KINDS = {
   'deed.transfer': {
     provision: 'art-05/§2/¶2',
     check(root, a) {
+      const off = refuseUnused(root, 'deeds', 'deeds');
+      if (off) return off;
       const d = existingDeed(root, a.deed);
       if (!d) return `no deed "${a.deed}", or it is not yet recognised`;
       if (!d.transferable) return `deed.${a.deed} is not transferable`;
@@ -332,6 +361,8 @@ export const KINDS = {
   'entity.resolve': {
     provision: 'art-04/§3/¶2',
     check(root, a) {
+      const off = refuseUnused(root, 'entities', 'a resolution of an entity');
+      if (off) return off;
       const e = entity(root, a.entity);
       if (!e) return `no entity ${a.entity}`;
       const roll = electorateOf(root, a.entity);
@@ -365,6 +396,8 @@ export const KINDS = {
   'entity.vote': {
     provision: 'art-04/§3/¶2',
     check(root, a) {
+      const off = refuseUnused(root, 'entities', 'voting in an entity');
+      if (off) return off;
       const r = resolution(root, a.entity, a.resolution);
       if (!r) return `no resolution ${a.resolution} of ${a.entity}`;
       const roll = electorateOf(root, a.entity);
@@ -389,6 +422,8 @@ export const KINDS = {
   'contract.sign': {
     provision: 'art-09/§7/¶2',
     check(root, a) {
+      const off = refuseUnused(root, 'contracts', 'contracts');
+      if (off) return off;
       const f = path.join(at(root, 'contracts'), `${a.contract}.md`);
       if (!fs.existsSync(f)) return `no contract ${a.contract}`;
       const [meta] = frontmatter(fs.readFileSync(f, 'utf8'));

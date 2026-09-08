@@ -19,6 +19,7 @@ offices:
       - journal.publish
       - checkpoint.sign
       - code.approve
+      - deed.recognise
   - id: treasurer
     title: Treasurer
     holder: c-0001

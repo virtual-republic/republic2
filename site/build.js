@@ -20,6 +20,7 @@ import { citizens, active, entities, offices, asDate } from '../core/registry.js
 import { state, accounts, bookOf, matchBook, TREASURY } from '../core/value.js';
 import { closesAt } from '../core/tally.js';
 import { powersOf, electorateOf, resolutions as resolutionsOf, countResolution } from '../core/governance.js';
+import { words, Word, inUse } from '../core/vocabulary.js';
 import { diffLines, pairEdits, summarise, locate, hunks } from '../core/diff.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -58,17 +59,44 @@ export async function buildSite(root, { base = '' } = {}) {
   const V = state(root);
   const ACCT = accounts(root);
   const UNIT = cfg.value.unit;
+  const W = words(root);
+  const ON = inUse(root);
+
+  // A part not in use is not built, not linked, and its acts are refused —
+  // art-01/§2/¶2, authority is exercised only where it is conferred. One place
+  // decides, so a page can never appear that the settings have switched off.
+  const omitted = [
+    ...(ON.assembly ? [] : ['assembly']),
+    ...(ON.offices ? [] : ['office']),
+    ...(ON.court ? [] : ['journal/court']),
+    ...(ON.deeds ? [] : ['journal/deeds']),
+    ...(ON.value ? [] : ['value']),
+    ...(ON.exchange ? [] : ['exchange']),
+    ...(ON.contracts ? [] : ['contracts']),
+    ...(ON.entities ? [] : ['register/e-']),
+  ];
+  const inUsePath = (rel) => !omitted.some((p) => rel === p || rel.startsWith(p + '/') || rel.startsWith(p));
 
   const repo = process.env.GITHUB_REPOSITORY || 'virtual-republic/republic';
   const branch = process.env.GITHUB_BRANCH || 'main';
 
   // ---- pages -----------------------------------------------------------------
 
-  const NAV = [['', 'Republic'], ['journal', 'Journal'], ['assembly', 'Assembly'],
-               ['office', 'Office'], ['register', 'Register'], ['value', 'Value'],
-               ['exchange', 'Exchange'], ['ledger', 'Ledger']];
-  const SUB = [['journal/constitution', 'Constitution'], ['journal/law', 'Law'],
-               ['journal/court', 'Court'], ['journal/deeds', 'Deeds'], ['journal/issues', 'Issues']];
+  const NAV = [
+    ['', Word(W.republic)], ['journal', Word(W.journal)],
+    ...(ON.assembly ? [['assembly', Word(W.assembly)]] : []),
+    ...(ON.offices ? [['office', Word(W.office)]] : []),
+    ['register', Word(W.register)],
+    ...(ON.value ? [['value', 'Value']] : []),
+    ...(ON.exchange ? [['exchange', 'Exchange']] : []),
+    ['ledger', 'Ledger'],
+  ];
+  const SUB = [
+    ['journal/constitution', 'Constitution'], ['journal/law', 'Law'],
+    ...(ON.court ? [['journal/court', Word(W.court)]] : []),
+    ...(ON.deeds ? [['journal/deeds', Word(W.deeds)]] : []),
+    ['journal/issues', 'Issues'],
+  ];
 
   let pageCount = 0;
 
@@ -97,6 +125,7 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
   }
 
   const write = (rel, html) => {
+    if (!inUsePath(rel)) return;
     const f = path.join(OUT, rel, 'index.html');
     fs.mkdirSync(path.dirname(f), { recursive: true });
     fs.writeFileSync(f, html);
@@ -183,9 +212,9 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
   // ---- home ------------------------------------------------------------------
 
   const openMeasures = C.measures.filter((m) => statusOf(m).open);
-  write('', page('Republic', `
+  write('', page(Word(W.republic), `
     <h1>${esc(cfg.name)}<span class="sub">${esc(cfg.motto)}</span></h1>
-    <p class="lede">A voluntary civic association governed by a text its citizens wrote. Every act is recorded, published, and verifiable by anyone.</p>
+    <p class="lede">A voluntary association governed by a text its ${esc(W.citizens)} wrote. Every act is recorded, published, and verifiable by anyone.</p>
 
     <h2>Before the Assembly</h2>
     <ul class="list">${openMeasures.length ? openMeasures.slice().reverse().map((m) =>
@@ -199,7 +228,7 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
 
     <h2>State</h2>
     <table><tbody>
-      <tr><td class="q">Citizens</td><td>${live.length}</td></tr>
+      <tr><td class="q">${esc(Word(W.citizens))}</td><td>${live.length}</td></tr>
       <tr><td class="q">Entities</td><td>${ents.filter((e) => e.status === 'active').length}</td></tr>
       <tr><td class="q">Records</td><td>${ev.length}</td></tr>
       <tr><td class="q">Register</td><td>${chain.ok ? 'verifies' : 'DOES NOT VERIFY'}</td></tr>
@@ -212,8 +241,8 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
     <table><tbody>
       <tr><td><a href="${u('/journal/constitution/')}">Constitution</a></td><td class="q">${C.articles.length} articles · the highest law</td></tr>
       <tr><td><a href="${u('/journal/law/')}">Law</a></td><td class="q">${C.statutes.length} statute${C.statutes.length === 1 ? '' : 's'} in force</td></tr>
-      <tr><td><a href="${u('/journal/court/')}">Court</a></td><td class="q">${C.judgments.length} case${C.judgments.length === 1 ? '' : 's'}</td></tr>
-      <tr><td><a href="${u('/journal/deeds/')}">Deeds</a></td><td class="q">${C.deeds.length} recognised</td></tr>
+      <tr><td><a href="${u('/journal/court/')}">${esc(Word(W.court))}</a></td><td class="q">${C.judgments.length} case${C.judgments.length === 1 ? '' : 's'}</td></tr>
+      <tr><td><a href="${u('/journal/deeds/')}">${esc(Word(W.deeds))}</a></td><td class="q">${C.deeds.length} recognised</td></tr>
       <tr><td><a href="${u('/journal/issues/')}">Issues</a></td><td class="q">${C.issues.length} issue${C.issues.length === 1 ? '' : 's'}</td></tr>
     </tbody></table>
     <p class="note">On disk this is one directory. The site follows the corpus rather than inventing a second arrangement.</p>`,
@@ -272,6 +301,47 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
 
   for (const s of C.statutes) {
     const cited = back.get(`stat.${s.id}`) || [];
+    const V = s.versions || [{ version: s.version || 1, body: s.body, sections: s.sections, current: true }];
+
+    // art-12/§3/¶2 — every version remains published. So every version gets a
+    // page, and any version may be set beside any other.
+    for (const v of V) {
+      if (v.current) continue;
+      write(`journal/law/${s.id}/v${v.version}`, page(`${s.title || s.id} — version ${v.version}`, `
+        <p class="crumb"><a href="${u('/journal/law/')}">Law</a> · <a href="${u(`/journal/law/${s.id}/`)}">${esc(s.title || s.id)}</a> · version ${v.version}</p>
+        <h1>${esc(s.title || s.id)}<span class="sub">version ${v.version}, superseded${v.enacted ? ' · was in force from ' + esc(isoDate(v.enacted)) : ''}${v.measure ? ' · ' + esc(v.measure) : ''}</span></h1>
+        <p class="note">This is not the law in force. It is kept because an act is read against the version in force when it was made — art-12/§3/¶3. <a href="${u(`/journal/law/${s.id}/`)}">The current text</a>.</p>
+        <article class="law">${sections(v.sections || [], `stat.${s.id}`)}</article>`,
+      { on: 'journal/law' }));
+    }
+
+    // Every pair, so any version may be compared with any other rather than
+    // only with the one that followed it.
+    for (const a of V) for (const b of V) {
+      if (a.version >= b.version) continue;
+      const d = pairEdits(diffLines(a.body, b.body));
+      const n = summarise(d);
+      const where = locate(b.body), was = locate(a.body);
+      write(`journal/law/${s.id}/v${a.version}-v${b.version}`, page(`${s.title || s.id} — v${a.version} to v${b.version}`, `
+        <p class="crumb"><a href="${u('/journal/law/')}">Law</a> · <a href="${u(`/journal/law/${s.id}/`)}">${esc(s.title || s.id)}</a> · v${a.version} → v${b.version}</p>
+        <h1>${esc(s.title || s.id)}<span class="sub">what changed between version ${a.version} and version ${b.version} — ${n.added} added, ${n.altered} altered, ${n.removed} struck</span></h1>
+        <p class="quiet">
+          <a href="${u(`/journal/law/${s.id}/${a.version === (s.version || 1) ? '' : 'v' + a.version + '/'}`)}">version ${a.version}</a> ·
+          <a href="${u(`/journal/law/${s.id}/${b.version === (s.version || 1) ? '' : 'v' + b.version + '/'}`)}">version ${b.version}</a>
+          ${b.measure ? ` · brought about by <a href="${u(`/assembly/${b.measure}/`)}">${esc(b.measure)}</a>` : ''}
+        </p>
+        ${n.added + n.altered + n.removed === 0 ? '<p class="quiet">The text is identical.</p>' : `<div class="diff">${d.map((x) => {
+          if (x.kind === 'same') return `<div class="line same"><span class="at"></span><span class="sign"> </span><span class="t">${esc(x.text)}</span></div>`;
+          const w = x.after ? where[x.after - 1] : x.before ? was[x.before - 1] : null;
+          const at2 = w && w.section ? `§${w.section}${w.paragraph ? '/¶' + w.paragraph : ''}` : '';
+          if (x.kind === 'altered') return `<div class="line was"><span class="at">${esc(at2)}</span><span class="sign">\u2212</span><span class="t">${esc(x.from)}</span></div>
+            <div class="line now"><span class="at"></span><span class="sign">+</span><span class="t">${esc(x.text)}</span></div>`;
+          const cls = x.kind === 'added' ? 'now' : 'was';
+          const sign = x.kind === 'added' ? '+' : '\u2212';
+          return `<div class="line ${cls}"><span class="at">${esc(at2)}</span><span class="sign">${sign}</span><span class="t">${esc(x.text)}</span></div>`;
+        }).join('')}</div>`}`,
+      { on: 'journal/law' }));
+    }
     write(`journal/law/${s.id}`, page(s.title || s.id, `
       <p class="crumb"><a href="${u('/journal/law/')}">Law</a> · stat.${esc(s.id)}</p>
       <h1>${esc(s.title || s.id)}<span class="sub">${esc(cfg.classes[s.class]?.label || s.class || '')}${s.version ? ' · version ' + s.version : ''}${s.enacted ? ' · in force since ' + esc(isoDate(s.enacted)) : ''}${s.measure ? ' · ' + esc(s.measure) : ''}</span></h1>
@@ -313,7 +383,22 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
         <div data-out class="out" hidden></div>
       </div>
       <article class="law">${sections(s.sections, `stat.${s.id}`)}</article>
-      ${(s.history || []).length ? `<h2>Earlier versions</h2><ul class="list">${[].concat(s.history).map((h) => `<li class="quiet">${esc(String(h))}</li>`).join('')}</ul>` : ''}
+      ${V.length > 1 ? `<h2>Versions</h2>
+      <table><thead><tr><th>Version</th><th>In force from</th><th>By</th><th></th></tr></thead>
+      <tbody>${V.slice().reverse().map((v) => `<tr>
+        <td>${v.current ? `${v.version} <span class="q">— in force</span>` : `<a href="${u(`/journal/law/${s.id}/v${v.version}/`)}">${v.version}</a>`}</td>
+        <td class="q">${esc(isoDate(v.enacted))}</td>
+        <td class="q">${v.measure ? `<a href="${u(`/assembly/${v.measure}/`)}">${esc(v.measure)}</a>` : '\u2014'}</td>
+        <td class="q">${v.version > 1 ? `<a href="${u(`/journal/law/${s.id}/v${v.version - 1}-v${v.version}/`)}">what changed</a>` : ''}</td></tr>`).join('')}</tbody></table>
+
+      <h3>Compare any two</h3>
+      <div class="row">
+        <select id="va">${V.map((v) => `<option value="${v.version}">version ${v.version}${v.current ? ' (in force)' : ''}</option>`).join('')}</select>
+        <span class="q">to</span>
+        <select id="vb">${V.map((v) => `<option value="${v.version}"${v.current ? ' selected' : ''}>version ${v.version}${v.current ? ' (in force)' : ''}</option>`).join('')}</select>
+        <a id="compare" class="button">Compare</a>
+      </div>
+      <p class="note">Every version remains published — art-12/§3/¶2. An act is read against the version in force when it was made — art-12/§3/¶3.</p>` : ''}
       ${s.journal ? `<h2>Promulgated</h2><ul class="list"><li><a href="${u(`/journal/issues/${s.journal}/`)}">Journal ${s.journal}</a></li>${s.measure ? `<li><a href="${u(`/assembly/${s.measure}/`)}">${esc(s.measure)}</a></li>` : ''}</ul>` : ''}
       ${cited.length ? `<h2>Cited by</h2><ul class="list">${cited.map((l) => `<li><a href="${u(l.href)}">${esc(l.label)}</a><span class="meta">${esc(String(l.at || '').slice(0, 10))}</span></li>`).join('')}</ul>` : ''}`,
       { on: 'journal/law', module: 'revise', data: {
