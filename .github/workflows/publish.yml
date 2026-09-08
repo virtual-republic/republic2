@@ -11,10 +11,9 @@ on:
   workflow_run:
     workflows: [close, settle, checkpoint]
     types: [completed]
-  # and when their pull request lands
-  pull_request:
-    types: [closed]
-    branches: [main]
+  # There is deliberately no pull_request trigger. Pages cannot deploy from a
+  # pull-request context, and it is not needed: a human merge to main IS a push
+  # to main, which the trigger above already catches.
   workflow_dispatch:
 
 # Never cancel a deploy. The last one carries the current state of the
