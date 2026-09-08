@@ -10,9 +10,9 @@
   "salt": "7a98628456ee0263",
   "signature": "-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgP75cSkD4zu2XN0RiWpZZInqtKj\noH98W2UnZexMYDkdwAAAAIcmVwdWJsaWMAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVk\nMjU1MTkAAABAhE8L5upIaGBELe79a2FoWKEsAKpZciHX39TOnn0MVr2k9zGMyksWRQrrfy\nVBOV98TDeQQwf9dAPxE7hlyec5Dg==\n-----END SSH SIGNATURE-----\n",
   "_file": "2026-09-07T06-02-58-821Z-order.json",
-  "_path": "/Users/tschoonover/Desktop/republic2/republic/acts/2026-09-07T06-02-58-821Z-order.json",
+  "_path": "/home/runner/work/republic2/republic2/acts/2026-09-07T06-02-58-821Z-order.json",
   "_refused": {
     "why": "e-0001 is not listed — its charter does not permit its instruments to be traded (art-04/§3/¶2). They may still be transferred directly.",
-    "at": "2026-09-08T04:41:33.867Z"
+    "at": "2026-09-08T04:29:44.439Z"
   }
 }

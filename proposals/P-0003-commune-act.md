@@ -1,15 +1,13 @@
 ---
-id: commune-act
+id: P-0003
 title: Commune Act
+sponsor: c-0001
 class: ordinary
-version: 2
-enacted: '2026-09-08'
-measure: P-0003
-journal: 4
-history:
-  - '1: P-0002 (Journal 3)'
+revises: commune-act
 cites:
   - const.art-04/§1/¶2
+opened: 2026-09-08
+closes: 2026-09-15
 ---
 
 ## § 1
