@@ -19,6 +19,7 @@ import { records, verifyChain, checkpoints } from '../core/ledger.js';
 import { citizens, active, entities, offices, asDate } from '../core/registry.js';
 import { state, accounts, bookOf, matchBook, TREASURY } from '../core/value.js';
 import { closesAt } from '../core/tally.js';
+import { powersOf, electorateOf, resolutions as resolutionsOf, countResolution } from '../core/governance.js';
 import { diffLines, pairEdits, summarise, locate, hunks } from '../core/diff.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -692,6 +693,9 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
     const charter = fs.existsSync(charterFile) ? fs.readFileSync(charterFile, 'utf8') : null;
     if (charter) fs.writeFileSync(path.join(OUT, `data/charters/${e.id}.md`), charter);
     const type = cfg.entities[e.type] || {};
+    const P = powersOf(root, e.id);
+    const roll = electorateOf(root, e.id);
+    const res = resolutionsOf(root, e.id).map((r) => ({ r, c: countResolution(root, r) }));
     const mine = instruments.filter(([, m]) => m.issuer === e.id);
     const held = [...(V.holdings.get(e.id) || new Map())].filter(([, q]) => q > 0);
 
@@ -702,8 +706,35 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
         <tr><td class="q">Organs</td><td>${(e.organs || []).map((o) => `${esc(o.name)}: ${(o.held_by || []).join(', ')}`).join('<br>') || '—'}</td></tr>
         <tr><td class="q">Members</td><td>${(e.members || []).join(', ') || '—'}</td></tr>
         <tr><td class="q">Holds</td><td>${V.balances.get(e.id) || 0} ${esc(UNIT)}${held.length ? '<br>' + held.map(([i, q]) => `${q} × ${esc(i)}`).join('<br>') : ''}</td></tr>
-        <tr><td class="q">May issue shares</td><td class="q">${type.instruments ? 'yes — art-10/§4/¶1' : 'no — art-04/§2/¶3'}</td></tr>
+        <tr><td class="q">May issue shares</td><td class="q">${P.instruments ? 'yes — art-10/§4/¶1' : 'no — art-04/§2/¶3'}</td></tr>
+        ${P.instruments ? `<tr><td class="q">Listed</td><td class="q">${P.listed
+          ? 'yes — its instruments are traded on the exchange'
+          : 'no — private. Its shares exist and transfer directly, but are not traded.'}</td></tr>` : ''}
+        <tr><td class="q">Decides by</td><td class="q">${P.vote === 'members' ? 'its members, one vote each' : 'its shares, weighted by holding'} · quorum ${(P.quorum * 100).toFixed(0)}% · threshold ${(P.threshold * 100).toFixed(0)}%</td></tr>
       </tbody></table>
+
+      <h2>Who decides</h2>
+      ${roll.length ? `<table><thead><tr><th>${P.vote === 'members' ? 'Member' : 'Holder'}</th><th>Weight</th></tr></thead>
+      <tbody>${roll.map((v) => `<tr><td>${esc(v.id)}</td><td>${v.weight}</td></tr>`).join('')}</tbody></table>
+      <p class="note">${P.vote === 'members'
+        ? 'Every member is a coequal member — one vote each, however much they hold (art-04/§3/¶2).'
+        : 'Each holder votes in proportion to what they hold.'}</p>`
+      : '<p class="quiet">Nobody yet.</p>'}
+
+      <h2>Resolutions</h2>
+      ${res.length ? `<table class="wide"><thead><tr><th>Resolution</th><th>Kind</th><th>Cast</th><th>Outcome</th></tr></thead>
+      <tbody>${res.map(({ r, c }) => `<tr><td>${esc(r.title)}<span class="q"> · ${esc(r.id)}</span></td>
+        <td class="q">${esc(r.kind)}${r.organ ? ' (' + esc(r.organ) + ')' : ''}</td>
+        <td class="q">${c.cast} of ${c.electorate}, ${c.quorumNeeded} needed</td>
+        <td class="q">${c.open ? 'open until ' + esc(String(r.closes)) : c.carried ? (c.winner ? 'carried — ' + esc(c.winner) : 'carried') : 'not carried'}</td></tr>`).join('')}</tbody></table>`
+      : '<p class="quiet">None yet.</p>'}
+
+      <div data-vote hidden>
+        <h3>Vote on a resolution</h3>
+        <label for="rpick">Resolution</label><select id="rpick"></select>
+        <div class="choices" data-choices></div>
+        <div class="row"><button data-act="entityvote" disabled>Sign the vote</button></div>
+      </div>
 
       ${charter ? `<h2>Charter</h2><article class="law">${markdown(charter.replace(/^---[\s\S]*?\n---\n/, ''))}</article>`
         : `<h2>Charter</h2><p class="quiet">${esc(e.id)} has no charter yet. Every entity has one — art-04/§3/¶1.</p>
@@ -735,6 +766,19 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
         <label for="oprice">Price</label><input type="text" id="oprice" inputmode="numeric">
         <div class="row"><button data-act="order">Sign</button></div>
 
+        <h3>Propose a resolution</h3>
+        <p class="quiet">Decided by ${P.vote === 'members' ? 'the members, one vote each' : 'the holders, weighted by shares'} — art-04/§3/¶2.</p>
+        <label for="rtitle">What is decided</label><input type="text" id="rtitle">
+        <label for="rkind">Kind</label>
+        <select id="rkind">
+          <option value="policy">policy — a decision of the entity</option>
+          <option value="officer">officer — fill an organ, which then acts for the entity</option>
+          <option value="charter">charter — replace the charter itself</option>
+        </select>
+        <label for="rorgan">Organ to fill, for an officer resolution</label><input type="text" id="rorgan" placeholder="director">
+        <label for="rtext">Text, or the whole charter for a charter resolution</label><textarea id="rtext" rows="6"></textarea>
+        <div class="row"><button data-act="resolve">Sign</button></div>
+
         <h3>Members</h3>
         <label for="mwho">Citizenships, comma separated</label><input type="text" id="mwho" placeholder="c-0002, c-0003">
         <div class="row"><button data-act="admit">Admit</button><button data-act="remove">Remove</button></div>
@@ -757,7 +801,13 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
         <div data-out class="out" hidden></div>
         <div class="row"><a data-commit class="button" hidden>Open on GitHub</a></div>
       </div>`,
-      { on: 'register', module: 'entity', data: { entity: e.id, organs: e.organs || [], hasCharter: !!charter } }));
+      { on: 'register', module: 'entity', data: {
+        entity: e.id, organs: e.organs || [], hasCharter: !!charter,
+        powers: P, electorate: roll,
+        resolutions: res.filter(({ c }) => c.open).map(({ r }) => ({ id: r.id, title: r.title, kind: r.kind, organ: r.organ || null })),
+        candidates: roll.map((v) => v.id),
+        next: 'R-' + String(res.length + 1).padStart(4, '0'),
+      } }));
   }
 
   const treasurer = offs.find((o) => (o.powers || []).includes('treasury.disburse'));

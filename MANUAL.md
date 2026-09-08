@@ -241,6 +241,68 @@ republic entity charter --entity e-0001 --by c-0001    # signs the amendment
 
 The entity's own page shows the charter and offers to create one if missing.
 
+### What its charter allows
+
+```bash
+republic entity powers --entity e-0001
+```
+
+The charter is **operative**, not decoration. Its front matter is read by the
+tools: who votes, how their votes are weighed, what carries, how long an officer
+serves, and whether the entity's instruments may be traded at all.
+
+A charter may **narrow** what its type allows and never widen it — Article 4
+§ 3 ³. A company may decide not to list; an association cannot grant itself the
+power to issue shares.
+
+| | Association, commune, organ | Company | Foundation |
+|---|---|---|---|
+| Decides by | members, one vote each | shares, by holding | members |
+| May issue instruments | no | yes | no |
+| Listed | — | **not by default** | — |
+
+**Coequal membership.** In an association every member has one vote however much
+they hold. Joining makes you the equal of everyone already there. That is what
+`vote: members` means, and it is the default for every type but a company.
+
+**A private company.** A company is **private unless its charter lists it**. Its
+shares exist, are recorded, and transfer directly between accounts — but no
+order for them is accepted on the exchange. An attempt is refused by name:
+
+> e-0001 is not listed — its charter does not permit its instruments to be
+> traded. They may still be transferred directly.
+
+To list it, the holders amend the charter by resolution.
+
+### Resolutions
+
+An entity decides by its own charter, not the Republic's rules.
+
+```bash
+republic entity resolve --entity e-0001 --title "Meet on Thursdays" --by c-0002
+republic entity vote --entity e-0001 --resolution R-0001 yes --by c-0002
+republic entity resolutions --entity e-0001
+```
+
+Three kinds:
+
+**policy** — a decision of the entity. Yes, no or abstain.
+
+**officer** — fills an organ. `--kind officer --organ director`. Whoever wins
+takes the organ, and thereby the authority the charter confers on it — Article 4
+§ 3 ². Vote by naming a candidate rather than yes or no.
+
+**charter** — replaces the charter itself. Pass the whole new text. This is how
+a company lists itself, or an association changes its threshold.
+
+Quorum and threshold come from the charter. A resolution closes early when
+everyone entitled has voted. Somebody who is neither a member nor a holder is
+refused by name.
+
+**On the site**, all of this is on the entity's own page: *Who decides* lists
+every voter and their weight, *Resolutions* shows what has been decided, and the
+management console proposes and votes.
+
 ### Manage it
 
 **Site.** The entity's page under **Register** has a *Manage* section, visible

@@ -11,6 +11,7 @@ founded: 2026-01-01
 paths:
   constitution: journal/constitution
   deeds: journal/deeds
+  resolutions: resolutions
   statutes: journal/statutes
   judgments: journal/judgments
   issues: journal/issues
@@ -57,12 +58,53 @@ offices:
   judge:      { title: Judge of the Court,    powers: [court.halt, court.void, court.judge] }
   term: 365
 
+# What each type may do, and how it decides by default. A charter may narrow
+# these but never widen them — art-04/§3/¶3.
+#
+#   vote: members  one member, one vote, however much they hold
+#   vote: shares   weighted by the instruments held
+#   listed         whether its instruments may be traded on the exchange
 entities:
-  association: { label: Association,           formed_by: citizen, account: true,  instruments: false }
-  company:     { label: Company,               formed_by: citizen, account: true,  instruments: true  }
-  foundation:  { label: Foundation,            formed_by: citizen, account: true,  instruments: false }
-  commune:     { label: Commune,               formed_by: law,     account: true,  instruments: false, entered_by: registrar }
-  organ:       { label: Organ of the Republic, formed_by: law,     account: true,  instruments: false, entered_by: registrar }
+  association:
+    label: Association
+    formed_by: citizen
+    account: true
+    instruments: false
+    governance: { vote: members, quorum: 0.50, threshold: 0.50, term: 365 }
+  company:
+    label: Company
+    formed_by: citizen
+    account: true
+    instruments: true
+    listed_by_default: false
+    governance: { vote: shares, quorum: 0.50, threshold: 0.50, term: 365 }
+  foundation:
+    label: Foundation
+    formed_by: citizen
+    account: true
+    instruments: false
+    governance: { vote: members, quorum: 0.50, threshold: 0.6667, term: 730 }
+  commune:
+    label: Commune
+    formed_by: law
+    account: true
+    instruments: false
+    entered_by: registrar
+    governance: { vote: members, quorum: 0.33, threshold: 0.50, term: 365 }
+  organ:
+    label: Organ of the Republic
+    formed_by: law
+    account: true
+    instruments: false
+    entered_by: registrar
+    governance: { vote: members, quorum: 0.50, threshold: 0.50, term: 365 }
+
+# A resolution of an entity's members. The same shape as a measure of the
+# Assembly, decided by the entity's own charter.
+resolutions:
+  window: 7
+  close_early: { on_full_participation: true }
+  kinds: [policy, officer, charter]
 
 value:
   unit: obol
