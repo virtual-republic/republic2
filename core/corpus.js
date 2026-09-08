@@ -119,6 +119,24 @@ export function corpus(root) {
     }
   }
 
+  // Superseded texts, kept for the record. art-12/§3/¶2 — every version remains
+  // published, and art-12/§3/¶3 — an act is read against the version in force
+  // when it was made. So every version must be readable, and comparable.
+  for (const st of statutes) {
+    st.versions = [];
+    const sup = path.join(at(root, 'statutes'), 'superseded');
+    if (fs.existsSync(sup)) {
+      for (const f of fs.readdirSync(sup).sort()) {
+        const m = f.match(new RegExp(`^${st.id.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\.v(\\d+)\\.md$`));
+        if (!m) continue;
+        const [meta, body] = frontmatter(fs.readFileSync(path.join(sup, f), 'utf8'));
+        st.versions.push({ version: Number(m[1]), ...meta, body: body.trim(), sections: parseSections(body).sections, path: path.join(sup, f) });
+      }
+    }
+    st.versions.push({ version: st.version || 1, ...st, body: st.body, sections: st.sections, current: true });
+    st.versions.sort((a, b) => a.version - b.version);
+  }
+
   // Journal
   const issues = [];
   for (const d of readAll(at(root, 'issues'))) {

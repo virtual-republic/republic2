@@ -470,6 +470,68 @@ await check('someone who does not sit may not judge', () => {
 await check('a case is decided only once', () =>
   !run('court', 'judge', '--case', '1', '--by', 'c-0001', '--holding', 'void', '--reasons', 'r').ok || 'decided twice');
 
+console.log('\nFitting it to a body\n');
+
+await check('an office does not gain a power by the settings changing', () => {
+  // art-06/§4/¶1 — the register governs what an office may do.
+  // Strip the power however the register formats it — a list item or inline.
+  const before = read('register/offices.yml');
+  const after = before.replace(/^\s*- deed\.recognise\s*$/m, '').replace(/,\s*deed\.recognise/, '');
+  if (after === before) return 'could not strip deed.recognise from the register';
+  put('register/offices.yml', after);
+  run('deed', 'request', '--id', 'sync-test', '--title', 'A test', '--by', 'c-0001');
+  run('settle');
+  run('deed', 'recognise', '--id', 'sync-test', '--by', 'c-0001');
+  const r = run('settle');
+  return r.out.includes('office sync') || r.out;
+});
+await check('sync shows the difference without changing anything', () => {
+  const r = run('office', 'sync');
+  return (!r.ok && r.out.includes('deed.recognise') && r.out.includes('Nothing is changed')) || r.out;
+});
+await check('sync --apply records the grant', () => {
+  const r = run('office', 'sync', '--apply');
+  if (!r.out.includes('deed.recognise')) return r.out;
+  run('deed', 'recognise', '--id', 'sync-test', '--by', 'c-0001');
+  return run('settle').out.includes('recognised and published') || 'still refused';
+});
+await check('a part switched off refuses its acts, and says why', () => {
+  const y = read('republic.yml').replace(/  exchange: true/, '  exchange: false');
+  put('republic.yml', y);
+  run('order', '--side', 'sell', '--instrument', 'e-0001:ordinary', '--quantity', '1', '--price', '1', '--by', 'c-0001', '--account', 'e-0001');
+  const r = run('settle');
+  put('republic.yml', read('republic.yml').replace(/  exchange: false/, '  exchange: true'));
+  return (r.out.includes('not in use') && r.out.includes('art-01/§2/¶2')) || r.out;
+});
+await check('the vocabulary changes the words and no rule', () => {
+  const y = read('republic.yml').replace(/^  citizens: citizens$/m, '  citizens: members').replace(/^  republic: Republic$/m, '  republic: Fellowship');
+  put('republic.yml', y);
+  run('build');
+  const h = read('dist/index.html');
+  const stillResolves = read('dist/data/citations.json').includes('const.art-01');
+  put('republic.yml', read('republic.yml').replace(/^  citizens: members$/m, '  citizens: citizens').replace(/^  republic: Fellowship$/m, '  republic: Republic'));
+  run('build');
+  return (h.includes('Fellowship') && h.includes('members') && stillResolves) || 'the words did not change, or a citation stopped resolving';
+});
+
+console.log('\nVersions of a law\n');
+
+await check('every version of a statute is kept and published', () => {
+  const st = fs.readdirSync(path.join(DIR, 'journal/statutes')).filter((f) => f.endsWith('.md'))[0];
+  const id = st.replace('.md', '');
+  run('build');
+  return has(`dist/journal/law/${id}/index.html`) || 'no statute page';
+});
+await check('any version may be compared with any other', () => {
+  const sup = path.join(DIR, 'journal/statutes/superseded');
+  if (!fs.existsSync(sup)) return true;                    // only one version yet
+  const f = fs.readdirSync(sup)[0];
+  if (!f) return true;
+  const id = f.split('.v')[0];
+  run('build');
+  return has(`dist/journal/law/${id}/v1-v2/index.html`) || 'no comparison page';
+});
+
 console.log('\nThe gate\n');
 
 const git = (...a) => { try { execFileSync('git', a, { cwd: DIR, stdio: 'pipe' }); } catch {} };

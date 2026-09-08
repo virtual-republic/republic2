@@ -7,6 +7,45 @@ name: The Republic
 motto: By record and by consent
 founded: 2026-01-01
 
+# What things are called here. The Constitution says "citizen" and "Assembly";
+# a club says "member" and "the Fellowship"; a co-op says "member" and "the
+# General Meeting". Changing these changes the words on the site and in the
+# tools. It changes no rule — the provisions still say what they say, and a
+# citation still resolves.
+vocabulary:
+  republic: Republic
+  citizen: citizen
+  citizens: citizens
+  assembly: Assembly
+  measure: measure
+  measures: measures
+  journal: Journal
+  register: register
+  court: Court
+  office: office
+  offices: offices
+  entity: entity
+  entities: entities
+  deed: deed
+  deeds: deeds
+
+# Which parts of the Republic are in use. Turning one off hides it from the site
+# and refuses its acts; it does not remove the law. A body that has no property
+# to allocate should not be made to look at an exchange.
+#
+# art-01/§2/¶2 — authority is exercised only where it is conferred. Switching a
+# subsystem off confers less, which a charter or a statute may always do.
+using:
+  assembly: true        # measures, voting, enactment
+  court: true           # cases and judgments
+  offices: true         # elected office with enumerated powers
+  entities: true        # sub-organisations with their own charters
+  value: true           # the unit, accounts, transfers
+  instruments: true     # shares in an entity
+  exchange: true        # trading those shares
+  contracts: true       # agreements between parties
+  deeds: true           # recognised title
+
 # Where everything lives. Decided once, and never migrated.
 paths:
   constitution: journal/constitution

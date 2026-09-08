@@ -132,6 +132,23 @@ in minutes rather than waiting out a week.
 To do it yourself: `republic close`, or `republic count P-0001` to see where a
 measure stands without closing it.
 
+### Reading an earlier version
+
+Every version of a statute remains published — Article 12 § 3 ². The statute's
+page lists them all, each linked, with the measure that brought it about.
+
+**Compare any two.** Not just consecutive ones: pick version 1 and version 5 and
+see what changed across the whole span, each alteration located by § and ¶.
+
+```
+/journal/law/<statute>/v2/       version 2, as it stood
+/journal/law/<statute>/v1-v3/    what changed between them
+```
+
+Article 12 § 3 ³ is why this matters: an act is read against the version in force
+when it was made. A judgment from March is read against March's text, and that
+text has to still be readable.
+
 ### Revise a law
 
 **Site.** Open the statute under **Journal → Law** and press *Propose a
@@ -567,6 +584,78 @@ resolves by keeping both sides, because an append-only log means both are real.
 Anything it cannot read, it refuses to touch.
 
 ---
+
+## Fitting it to your own body
+
+The Constitution says *citizen* and *Assembly* because its provisions use those
+words and a citation must keep resolving. But a club calls its people members and
+its meeting the General Meeting, and being made to call them citizens of a
+Republic is a good way to make a club feel absurd.
+
+So the law keeps its words and **the interface takes yours**.
+
+```yaml
+vocabulary:
+  republic: Fellowship
+  citizen: member
+  citizens: members
+  assembly: General Meeting
+  measure: motion
+  journal: Record
+  register: roll
+  court: Tribunal
+  entity: committee
+  deed: grant
+```
+
+Nothing there changes a rule. `const.art-08/§4/¶1` still resolves, still says what
+it says, and still governs. Only the printing changes.
+
+### Using only the parts you need
+
+```yaml
+using:
+  assembly: true
+  offices: true
+  entities: true
+  value: true
+  deeds: true
+  contracts: true
+  court: false
+  instruments: false
+  exchange: false
+```
+
+A part switched off is **not built, not linked, and its acts are refused** — with
+a reason that explains itself rather than looking like a fault:
+
+> the exchange is not in use in this Fellowship. The settings turn "exchange"
+> off — art-01/§2/¶2, authority is exercised only where it is conferred.
+
+Article 1 § 2 ² is the justification, and it is a real one: authority is
+exercised only where it is conferred, so conferring less is always open to you.
+A body with nothing to allocate should not be made to look at an exchange.
+
+`samples/settings/club.yml` is a worked preset for a club or fellowship. Merge
+its keys into `republic.yml`.
+
+### Offices and the settings
+
+**The register governs, not the settings.** Article 6 § 4 ¹ — every office holds
+an enumerated set of powers and no others, and the set is *published*. So an
+office written before a power existed does not acquire it because `republic.yml`
+changed later.
+
+That is deliberate, and it is also a trap the first time it bites. If an act is
+refused with *no office on the register holds …*:
+
+```bash
+republic office sync              # what the settings grant that the register lacks
+republic office sync --apply      # record the grant
+```
+
+It shows the difference and changes nothing until you ask. The grant is recorded
+as an act, because it alters what an office may do.
 
 ## Changing the code
 

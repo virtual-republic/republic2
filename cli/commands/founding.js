@@ -259,8 +259,15 @@ export const office = {
   help: `  republic office                          what is held and what is outstanding
   republic office install [P-0002|--all]   give effect to a carried election
   republic office appoint --office <id> --holder <c-0001>
-  republic office vacant --fill <c-0001>   fill every office held by nobody`,
-  async run({ root, arg, positional }) {
+  republic office vacant --fill <c-0001>   fill every office held by nobody
+  republic office sync [--apply]           powers the settings grant but the register lacks
+
+art-06/§4/¶1 — every office holds an enumerated set of powers and no others, and
+the set is PUBLISHED. So the register governs, not the settings: an office that
+was written before a power existed does not acquire it by the settings changing.
+"sync" shows the difference and, with --apply, records the grant.`,
+  async run({ root, arg, flag, positional }) {
+    const flagApply = () => flag('apply');
     const [sub] = positional;
     const list = offices(root);
     const live = new Set(active(root).map((c) => c.id));
@@ -327,6 +334,63 @@ export const office = {
       if (!o || !h) { console.error('republic office appoint --office <id> --holder <c-0001>'); return 2; }
       if (!live.has(h)) { console.error(`${h} is not an active citizenship.`); return 1; }
       install([o], h, 'art-06/§3/¶4', 'art-06/§3/¶4');
+      return 0;
+    }
+
+    if (sub === 'sync') {
+      const spec = config(root).offices;
+      const all = offices(root);
+      const missing = [];
+
+      for (const o of all) {
+        const want = spec[o.id]?.powers || [];
+        const have = o.powers || [];
+        const gained = want.filter((p) => !have.includes(p));
+        const lost = have.filter((p) => !want.includes(p));
+        if (gained.length || lost.length) missing.push({ office: o, gained, lost });
+      }
+
+      // An office named in the settings but absent from the register.
+      for (const [oid, o] of Object.entries(spec)) {
+        if (oid === 'term' || all.some((x) => x.id === oid)) continue;
+        missing.push({ office: null, id: oid, title: o.title, gained: o.powers || [], lost: [], absent: true });
+      }
+
+      if (!missing.length) { console.log('The register and the settings agree. Nothing to grant.'); return 0; }
+
+      console.log('The settings grant what the register does not:\n');
+      for (const m of missing) {
+        const name = m.office ? m.office.id : m.id;
+        if (m.absent) { console.log(`  ${name.padEnd(12)} is not on the register at all`); continue; }
+        if (m.gained.length) console.log(`  ${name.padEnd(12)} + ${m.gained.join(', ')}`);
+        if (m.lost.length) console.log(`  ${name.padEnd(12)} - ${m.lost.join(', ')}   (the register has it; the settings no longer name it)`);
+      }
+
+      if (!arg('apply') && !positional.includes('--apply') && !flagApply()) {
+        console.log('\nNothing is changed until you ask for it:');
+        console.log('  republic office sync --apply');
+        console.log('\nart-06/§4/¶1 — this alters what an office may do, so commit it and say so.');
+        return 1;
+      }
+
+      console.log('\nGranting.\n');
+      const list = offices(root);
+      for (const m of missing) {
+        if (m.absent) {
+          const ends = new Date(); ends.setDate(ends.getDate() + 365);
+          const holder = list[0]?.holder || active(root)[0]?.id;
+          list.push({ id: m.id, title: m.title, holder, since: today(), term_ends: ends.toISOString().slice(0, 10), under: 'art-06/§3/¶4', powers: m.gained });
+          append(root, { author: holder, kind: 'office.established', provision: 'art-06/§1/¶2', payload: { office: m.id, powers: m.gained, holder } });
+          console.log(`  ${m.id} established, held by ${holder} until an election`);
+          continue;
+        }
+        const o = list.find((x) => x.id === m.office.id);
+        o.powers = spec[o.id].powers;
+        append(root, { author: o.holder, kind: 'office.powers.set', provision: 'art-06/§4/¶1', payload: { office: o.id, powers: o.powers, gained: m.gained, lost: m.lost } });
+        console.log(`  ${o.id}: ${o.powers.join(', ')}`);
+      }
+      writeOffices(root, list);
+      console.log('\nCommit register/offices.yml and the ledger. This is what an office may do, so the change is published.');
       return 0;
     }
 

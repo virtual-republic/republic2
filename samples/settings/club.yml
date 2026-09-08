@@ -1,0 +1,59 @@
+# A club or fellowship. Merge these keys into republic.yml.
+#
+# What it turns off: the exchange and instruments, because a club has no shares;
+# and the Court, because thirty people who like each other should talk rather
+# than litigate. Turn the Court on the first time talking does not work.
+#
+# What it keeps: the register, the founding documents as addressable law, offices
+# with enumerated powers, entities for committees, and the unit for tracking
+# contributions.
+
+name: The Orchard
+motto: By record and by consent
+
+vocabulary:
+  republic: Fellowship
+  citizen: member
+  citizens: members
+  assembly: General Meeting
+  measure: motion
+  measures: motions
+  journal: Record
+  register: roll
+  court: Tribunal
+  office: office
+  offices: offices
+  entity: committee
+  entities: committees
+  deed: grant
+  deeds: grants
+
+using:
+  assembly: true
+  offices: true
+  entities: true
+  value: true
+  deeds: true
+  contracts: true
+  court: false
+  instruments: false
+  exchange: false
+
+offices:
+  secretary:  { title: Secretary,  powers: [citizen.admit, journal.publish, checkpoint.sign, code.approve, deed.recognise] }
+  treasurer:  { title: Treasurer,  powers: [value.issue, treasury.disburse] }
+  auditor:    { title: Auditor,    powers: [audit.report] }
+  term: 365
+
+classes:
+  policy:     { label: Motion,              quorum: 0.20, threshold: 0.50, window: 7 }
+  ordinary:   { label: Ordinary motion,     quorum: 0.20, threshold: 0.50, window: 7 }
+  organic:    { label: Standing order,      quorum: 0.33, threshold: 0.6667, window: 14 }
+  amendment:  { label: Amendment to the Compact, quorum: 0.50, threshold: 0.6667, window: 21, readings: 2, apart: 30 }
+  entrenched: { label: Entrenched provision, quorum: 0.60, threshold: 0.75, window: 30, readings: 2, apart: 30 }
+  election:   { label: Election,            quorum: 0.33, method: irv, window: 7 }
+
+value:
+  unit: unit
+  subunit: point
+  issue_cap: 100000

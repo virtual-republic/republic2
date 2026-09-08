@@ -2,6 +2,19 @@ import { DATA, $, say, problem, ready, onIdentity, who, offerCommit } from './co
 import { attachPicker, insertSection, insertParagraph, renumber } from './cite.js';
 await ready;
 
+// Compare any two versions — art-12/§3/¶2.
+const cmp = $('#compare');
+if (cmp) {
+  const go = () => {
+    const a = Number($('#va').value), b = Number($('#vb').value);
+    const [lo, hi] = a < b ? [a, b] : [b, a];
+    cmp.href = lo === hi ? '#' : `${DATA.base}/journal/law/${DATA.statute}/v${lo}-v${hi}/`;
+    cmp.setAttribute('aria-disabled', String(lo === hi));
+    cmp.textContent = lo === hi ? 'same version' : `Compare v${lo} to v${hi}`;
+  };
+  $('#va').onchange = go; $('#vb').onchange = go; go();
+}
+
 const box = $('#editor');
 $('#revise').onclick = () => {
   box.hidden = !box.hidden;
