@@ -7,5 +7,11 @@
   "by": "c-0001",
   "at": "2026-09-09T20:29:53.287Z",
   "salt": "971865cf283c9588",
-  "signature": "-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgP75cSkD4zu2XN0RiWpZZInqtKj\noH98W2UnZexMYDkdwAAAAIcmVwdWJsaWMAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVk\nMjU1MTkAAABAaNqBJq51eIAwGTPnPhqxkmTFMVRQGykDjTMdWnzrjRnQV2dmjuPodzucts\nNeuJDXEp9/xu3ft9Yx9KtL6C1NBA==\n-----END SSH SIGNATURE-----\n"
+  "signature": "-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgP75cSkD4zu2XN0RiWpZZInqtKj\noH98W2UnZexMYDkdwAAAAIcmVwdWJsaWMAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVk\nMjU1MTkAAABAaNqBJq51eIAwGTPnPhqxkmTFMVRQGykDjTMdWnzrjRnQV2dmjuPodzucts\nNeuJDXEp9/xu3ft9Yx9KtL6C1NBA==\n-----END SSH SIGNATURE-----\n",
+  "_file": "2026-09-09T20-29-53-287Z-deed-recognise.json",
+  "_path": "/home/runner/work/republic2/republic2/acts/2026-09-09T20-29-53-287Z-deed-recognise.json",
+  "_refused": {
+    "why": "deed.Fursona Grant 1 is already recognised",
+    "at": "2026-09-09T20:44:59.105Z"
+  }
 }
