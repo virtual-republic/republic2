@@ -1,0 +1,10 @@
+{
+  "kind": "contract.sign",
+  "contract": "test-contract",
+  "party": "c-0001",
+  "document": "a10f93cbc92acf04ce5bb4ab68a2216e03ad8b445bd1b0c28047ff2899b444f1",
+  "by": "c-0001",
+  "at": "2026-09-09T20:02:25.182Z",
+  "salt": "058aeeba9183a5f2",
+  "signature": "-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgP75cSkD4zu2XN0RiWpZZInqtKj\noH98W2UnZexMYDkdwAAAAIcmVwdWJsaWMAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVk\nMjU1MTkAAABAd+Q0f3uoR5HuZoEFb9+8BnZU5b7TaKX53Lcich8hEZYLbcmkuNL/4nBEaP\nqFe9atSxKzJho87zbeqqRhOYyFAA==\n-----END SSH SIGNATURE-----\n"
+}
