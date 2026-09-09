@@ -1,0 +1,37 @@
+{
+  "measure": "P-0004",
+  "election": false,
+  "yes": 2,
+  "no": 0,
+  "abstain": 0,
+  "winner": null,
+  "rounds": [],
+  "cast": 2,
+  "electorate": 2,
+  "quorumNeeded": 1,
+  "quorumMet": true,
+  "share": 1,
+  "threshold": 0.5,
+  "thresholdMet": true,
+  "open": false,
+  "closedEarly": "every citizenship has voted",
+  "closes": "2026-09-16T23:59:59.000Z",
+  "carried": true,
+  "counted": [
+    {
+      "id": "c-0001",
+      "choice": "yes",
+      "at": "2026-09-09T21:31:15.478Z",
+      "receipt": "7e84adc298e73b9a"
+    },
+    {
+      "id": "c-0002",
+      "choice": "yes",
+      "at": "2026-09-09T21:34:24.908Z",
+      "receipt": "643ccafa33750cc2"
+    }
+  ],
+  "rejected": [],
+  "delegated": [],
+  "countedAt": "2026-09-09T21:34:56.197Z"
+}
