@@ -1,0 +1,13 @@
+{
+  "kind": "deed.request",
+  "deed": "test-1",
+  "title": "Test 1",
+  "deedKind": "property",
+  "holder": "c-0001",
+  "transferable": true,
+  "text": "This is a test to see if it works",
+  "by": "c-0001",
+  "at": "2026-09-09T21:45:54.212Z",
+  "salt": "a6737c7732c71f48",
+  "signature": "-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgP75cSkD4zu2XN0RiWpZZInqtKj\noH98W2UnZexMYDkdwAAAAIcmVwdWJsaWMAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVk\nMjU1MTkAAABA1nmL4QTCJ90axSYs++X+fDDDZSSgLhQKqGihAeIkfsJSjyUIbKkWozoPZ2\n/KgauO7doK2AXDgZOa1OK29WtQDw==\n-----END SSH SIGNATURE-----\n"
+}
