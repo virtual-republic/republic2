@@ -276,13 +276,16 @@ export const KINDS = {
       if (existingDeed(root, a.deed)) return `deed.${a.deed} is already recognised`;
       const req = requestedDeed(root, a.deed);
       if (!req && !a.title) return `no request for "${a.deed}", and no title given to recognise one directly`;
-      const holder = a.holder || req?.holder;
+      // art-05/§2/¶2 — the Keeper may recognise on their own motion. With no
+      // request behind it there is nobody to take the holder from, so it is the
+      // Keeper unless they name someone.
+      const holder = a.holder || req?.holder || a.by;
       if (!accounts(root).has(holder)) return `"${holder}" is not an account`;
       return null;
     },
     apply(root, a) {
       const req = requestedDeed(root, a.deed);
-      const holder = a.holder || req?.holder;
+      const holder = a.holder || req?.holder || a.by;
       const transferable = a.transferable !== undefined ? a.transferable === true : !!req?.transferable;
       const title = a.title || req?.title;
       const kind = a.deedKind || req?.kind || 'property';

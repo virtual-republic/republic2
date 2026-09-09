@@ -1,0 +1,14 @@
+{
+  "kind": "deed.recognise",
+  "deed": "36",
+  "by": "c-0001",
+  "at": "2026-09-09T21:57:15.513Z",
+  "salt": "309ee5976e7a2d54",
+  "signature": "-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgP75cSkD4zu2XN0RiWpZZInqtKj\noH98W2UnZexMYDkdwAAAAIcmVwdWJsaWMAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVk\nMjU1MTkAAABAojLsmt/GF/zoYbyrU6tB+sqHjHzFLH+461z6AKLfLnu2iV33WC7Iaig9RY\nTtw0VIMf4xYHfAtpJ5TzAhEhKdBA==\n-----END SSH SIGNATURE-----\n",
+  "_file": "2026-09-09T21-57-15-513Z-deed-recognise.json",
+  "_path": "/Users/tschoonover/Desktop/republic2/republic/acts/2026-09-09T21-57-15-513Z-deed-recognise.json",
+  "_refused": {
+    "why": "no request for \"36\", and no title given to recognise one directly",
+    "at": "2026-09-09T21:57:15.614Z"
+  }
+}
