@@ -1,0 +1,9 @@
+{
+  "kind": "deed.recognise",
+  "deed": "my-deed",
+  "title": "Something",
+  "by": "c-0001",
+  "at": "2026-09-09T20:06:23.422Z",
+  "salt": "aeb033aa5bbc19a3",
+  "signature": "-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgP75cSkD4zu2XN0RiWpZZInqtKj\noH98W2UnZexMYDkdwAAAAIcmVwdWJsaWMAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVk\nMjU1MTkAAABApVjC+x3D03sKhDoGBc9oPEUyfrR4pjZA0OHrw3sjYLuBZGp4vg68pqw7xi\nVjKCc468DpGBa9A7PZ36deUjZKAA==\n-----END SSH SIGNATURE-----\n"
+}
