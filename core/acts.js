@@ -19,6 +19,7 @@ import { citizen, entity, entities, offices, mayExercise, keysOf, writeOffices, 
 import { state, accounts, mayActFor, matchBook, TREASURY } from './value.js';
 import { corpus, frontmatter, isoDate, parseSections } from './corpus.js';
 import { refuseUnused } from './vocabulary.js';
+import { deedState } from './deeds.js';
 import { powersOf, charterOf, electorateOf, resolution, countResolution, writeResolutionResult, resolutionDir } from './governance.js';
 
 // The message an act signs: everything except the signature, canonically.
@@ -276,13 +277,16 @@ export const KINDS = {
       if (existingDeed(root, a.deed)) return `deed.${a.deed} is already recognised`;
       const req = requestedDeed(root, a.deed);
       if (!req && !a.title) return `no request for "${a.deed}", and no title given to recognise one directly`;
-      const holder = a.holder || req?.holder;
+      // art-05/§2/¶2 — the Keeper may recognise on their own motion. With no
+      // request behind it there is nobody to take the holder from, so it is the
+      // Keeper unless they name someone.
+      const holder = a.holder || req?.holder || a.by;
       if (!accounts(root).has(holder)) return `"${holder}" is not an account`;
       return null;
     },
     apply(root, a) {
       const req = requestedDeed(root, a.deed);
-      const holder = a.holder || req?.holder;
+      const holder = a.holder || req?.holder || a.by;
       const transferable = a.transferable !== undefined ? a.transferable === true : !!req?.transferable;
       const title = a.title || req?.title;
       const kind = a.deedKind || req?.kind || 'property';
@@ -437,17 +441,29 @@ export const KINDS = {
 };
 
 function existingDeed(root, id) {
+  const folded = existingDeedFolded(root, id);
+  if (!folded) return null;
   const f = path.join(at(root, 'deeds'), `${id}.md`);
-  if (!fs.existsSync(f)) return null;
-  const [meta, body] = frontmatter(fs.readFileSync(f, 'utf8'));
-  return { ...meta, body: body.trim() };
+  const fromFile = fs.existsSync(f) ? frontmatter(fs.readFileSync(f, 'utf8')) : [{}, ''];
+  return { ...fromFile[0], ...folded, body: (fromFile[1] || folded.body || '').trim() };
 }
 
+// The RECORD is authoritative, not the file — art-05/§1/¶2. A request that was
+// recorded may be recognised even if its file went astray in a merge, and a
+// file with no record behind it is not a request at all.
 function requestedDeed(root, id) {
+  const folded = deedState(root).all.find((d) => d.id === id);
+  if (!folded || folded.status !== 'requested') return null;
+
+  // The file supplies the words where it survives; the record supplies the rest.
   const f = path.join(at(root, 'deeds'), 'requested', `${id}.md`);
-  if (!fs.existsSync(f)) return null;
-  const [meta, body] = frontmatter(fs.readFileSync(f, 'utf8'));
-  return meta.status === 'requested' ? { ...meta, body: body.trim() } : null;
+  const fromFile = fs.existsSync(f) ? frontmatter(fs.readFileSync(f, 'utf8')) : [{}, ''];
+  return { ...fromFile[0], ...folded, body: (fromFile[1] || folded.body || '').trim() };
+}
+
+function existingDeedFolded(root, id) {
+  const d = deedState(root).all.find((x) => x.id === id);
+  return d && d.status === 'valid' ? d : null;
 }
 
 const holderOfPower = (root, power) => offices(root).find((o) => (o.powers || []).includes(power)) || null;

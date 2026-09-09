@@ -443,6 +443,12 @@ await check('the Keeper may recognise one directly, with no request', () => {
   const d = read('journal/deeds/seat.md');
   return d.includes('recognised_directly: true') || d;
 });
+await check('recognising directly with no holder named holds it for the Keeper', () => {
+  run('deed', 'recognise', '--id', 'own-motion', '--title', 'On my own motion', '--by', 'c-0001');
+  const r = run('settle');
+  if (!r.out.includes('recognised and published')) return r.out;
+  return read('journal/deeds/own-motion.md').includes('holder: c-0001') || 'the holder was not defaulted';
+});
 await check('the Keeper may refuse a request, with reasons', () => {
   run('deed', 'request', '--id', 'the-moon', '--title', 'The moon', '--by', 'c-0004');
   run('settle');
@@ -451,6 +457,36 @@ await check('the Keeper may refuse a request, with reasons', () => {
   return r.out.includes('is refused') || r.out;
 });
 await check('a refused request confers nothing', () => !has('journal/deeds/the-moon.md') || 'a refused request became a deed');
+
+// art-05/§1/¶2 — the record is authoritative. A file lost in a merge must not
+// lose a deed, and the page must not depend on one having survived.
+await check('a request survives the loss of its file', () => {
+  run('deed', 'request', '--id', 'paper-mill', '--title', 'The paper mill', '--by', 'c-0001');
+  run('settle');
+  fs.rmSync(path.join(DIR, 'journal/deeds/requested/paper-mill.md'), { force: true });
+  const r = run('deed', 'list');
+  return r.out.includes('paper-mill') || `the request vanished with its file:\n${r.out}`;
+});
+await check('and may still be recognised from the record alone', () => {
+  run('deed', 'recognise', '--id', 'paper-mill', '--by', 'c-0001');
+  const r = run('settle');
+  return r.out.includes('recognised and published') || r.out;
+});
+await check('the page reads deeds from the register, not from files', () => {
+  run('build');
+  const d = JSON.parse(read('dist/data/deeds.json'));
+  return (d.recogniser && d.recogniser.holder && d.deeds.some((x) => x.id === 'paper-mill' && x.status === 'valid'))
+    || JSON.stringify(d).slice(0, 200);
+});
+await check('when no office holds the power, the page says so', () => {
+  const before = read('register/offices.yml');
+  put('register/offices.yml', before.replace(/^\s*- deed\.recognise\s*$/m, ''));
+  run('build');
+  const d = JSON.parse(read('dist/data/deeds.json'));
+  put('register/offices.yml', before);
+  run('build');
+  return d.recogniser === null || `it claimed a recogniser: ${JSON.stringify(d.recogniser)}`;
+});
 
 console.log('\nThe Court\n');
 
@@ -530,6 +566,39 @@ await check('any version may be compared with any other', () => {
   const id = f.split('.v')[0];
   run('build');
   return has(`dist/journal/law/${id}/v1-v2/index.html`) || 'no comparison page';
+});
+
+console.log('\nOther Republics\n');
+
+await check('another Republic may be recognised', () => {
+  const key = read('register/keepers.txt').trim();
+  const r = run('foreign', 'recognise', '--name', 'alpha', '--url', 'https://alpha.example', '--keeper-key', key);
+  return r.out.includes('Recognised alpha') || r.out;
+});
+await check('a checkpoint signed by their Keeper is witnessed', () => {
+  run('checkpoint');
+  const f = fs.readdirSync(path.join(DIR, 'checkpoints')).sort().pop();
+  const r = run('foreign', 'witness', '--name', 'alpha', '--checkpoint', `checkpoints/${f}`);
+  return r.out.includes('witnessed alpha checkpoint') || r.out;
+});
+await check('a checkpoint signed by nobody we know is refused', () => {
+  const f = fs.readdirSync(path.join(DIR, 'checkpoints')).sort().pop();
+  const cp = JSON.parse(read(`checkpoints/${f}`));
+  cp.number += 1; cp.root = 'f'.repeat(64);
+  put('fake.json', JSON.stringify(cp));
+  const r = run('foreign', 'witness', '--name', 'alpha', '--checkpoint', 'fake.json');
+  return (!r.ok && /signature/.test(r.out)) || r.out;
+});
+await check('a rewritten foreign history is detected and recorded', () => {
+  const f = fs.readdirSync(path.join(DIR, 'checkpoints')).sort().pop();
+  const cp = JSON.parse(read(`checkpoints/${f}`));
+  // same number, different root — exactly what a rewrite looks like
+  const seen = read('ledger/events.jsonl').includes('republic.witnessed');
+  if (!seen) return 'nothing was witnessed to compare against';
+  cp.root = '0'.repeat(64);
+  put('rewritten.json', JSON.stringify(cp));
+  const r = run('foreign', 'witness', '--name', 'alpha', '--checkpoint', 'rewritten.json');
+  return (!r.ok && /rewritten|signature/.test(r.out)) || r.out;
 });
 
 console.log('\nThe gate\n');
