@@ -15,6 +15,7 @@ export const RULES = [
   { re: /^journal\/deeds\//,             need: null, why: 'the Keeper recognises a deed; the Assembly does not vote on it' },
   { re: /^register\/citizens\//,         need: null, why: 'admission takes effect on recording (art-03/§3)' },
   { re: /^register\/entities\//,         need: null, why: 'formation as of right, or by measure (art-04)' },
+  { re: /^register\/republics\.yml$/,   need: 'ordinary', why: 'whose Keeper key we check (art-05/§4/¶2)' },
   { re: /^(acts|settled|refused)\//,     need: null, why: 'signed instruments and their settlement' },
   { re: /^(charters|contracts)\//,       need: null, why: 'instruments of an entity or between parties' },
   { re: /^resolutions\//,                need: null, why: 'an entity deciding by its own charter (art-04/§3/¶2)' },

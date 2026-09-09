@@ -19,6 +19,8 @@ import { tally, closesAt } from '../../core/tally.js';
 import { classOf } from '../../core/config.js';
 import { classify } from '../../core/rules.js';
 import { sha256 } from '../../core/hash.js';
+import { republics, republic as foreignRepublic, writeRepublics, witnessed, checkForeign } from '../../core/foreign.js';
+import { deedState, recogniser } from '../../core/deeds.js';
 
 const now = () => new Date().toISOString();
 const salt = (n = 8) => crypto.randomBytes(n).toString('hex');
@@ -409,27 +411,33 @@ directly without a request. A deed is transferable only if it says so.`,
     const dir = at(root, 'deeds');
 
     if (!sub || sub === 'list') {
-      const live = corpus(root).deeds;
-      const reqDir = path.join(dir, 'requested');
-      const asked = fs.existsSync(reqDir)
-        ? fs.readdirSync(reqDir).filter((f) => f.endsWith('.md')).map((f) => frontmatter(fs.readFileSync(path.join(reqDir, f), 'utf8'))[0])
-        : [];
-      if (!live.length && !asked.length) { console.log('No deeds, and nothing requested.'); return 0; }
-      if (live.length) {
+      // From the register, not from the files — art-05/§1/¶2.
+      const D = deedState(root);
+      const who = recogniser(root);
+
+      if (!D.all.length) { console.log('No deeds, and nothing requested.'); return 0; }
+
+      if (D.valid.length) {
         console.log('Recognised — valid (art-05/§2/¶2):\n');
-        for (const d of live) console.log(`  deed.${String(d.id).padEnd(24)} ${String(d.kind || '').padEnd(11)} held by ${String(d.holder).padEnd(10)} ${d.transferable ? 'transferable' : 'not transferable'}   Journal ${d.journal}`);
+        for (const d of D.valid) {
+          console.log(`  deed.${String(d.id).padEnd(24)} ${String(d.kind || '').padEnd(11)} held by ${String(d.holder).padEnd(10)} `
+            + `${d.transferable ? 'transferable' : 'not transferable'}   Journal ${d.journal ?? '?'}`);
+        }
       }
-      const pending = asked.filter((d) => d.status === 'requested');
-      const refused = asked.filter((d) => d.status === 'refused');
-      if (pending.length) {
-        console.log(`\nRequested — not valid until recognised:\n`);
-        for (const d of pending) console.log(`  ${String(d.id).padEnd(24)} ${d.title}  (asked by ${d.requested_by})`);
-        const who = offices(root).find((o) => (o.powers || []).includes('deed.recognise'));
-        console.log(`\n  ${who ? who.title + ' is ' + who.holder : 'Nobody holds deed.recognise'}:  republic deed recognise --id <slug> --by ${who ? who.holder : '<keeper>'}`);
+
+      if (D.requested.length) {
+        console.log('\nRequested — not valid until recognised:\n');
+        for (const d of D.requested) {
+          console.log(`  ${String(d.id).padEnd(24)} ${d.title || ''}  (asked by ${d.requested_by})`);
+        }
+        console.log(who
+          ? `\n  ${who.title} is ${who.holder}:  republic deed recognise --id <slug> --by ${who.holder}`
+          : `\n  No office on the register holds deed.recognise, so nobody may recognise these.\n  republic office sync --apply`);
       }
-      if (refused.length) {
-        console.log(`\nRefused:\n`);
-        for (const d of refused) console.log(`  ${String(d.id).padEnd(24)} ${d.reasons}`);
+
+      if (D.refused.length) {
+        console.log('\nRefused:\n');
+        for (const d of D.refused) console.log(`  ${String(d.id).padEnd(24)} ${d.reasons || ''}`);
       }
       return 0;
     }
@@ -466,6 +474,93 @@ directly without a request. A deed is transferable only if it says so.`,
       return 0;
     }
     console.error('republic deed <request|recognise|refuse|transfer|list>');
+    return 2;
+  },
+};
+
+export const foreign = {
+  group: 'Other Republics',
+  summary: 'recognise another Republic, and witness its history',
+  help: `  republic foreign list
+  republic foreign recognise --name <x> --url <https://...> --keeper-key "ssh-ed25519 AAAA..."
+  republic foreign witness --name <x> --checkpoint <file.json>
+  republic foreign history --name <x>
+
+art-05/§4/¶2 — any person may operate a monitor, checking each published
+checkpoint against the last. Recognising another Republic is not trusting it. It
+is holding its Keeper key, checking what it publishes, and recording what you
+saw — so that if its history changes afterwards, you notice.`,
+  async run({ root, arg, positional }) {
+    const [sub] = positional;
+
+    if (!sub || sub === 'list') {
+      const all = republics(root);
+      if (!all.length) {
+        console.log('No other Republic is recognised.');
+        console.log('\n  republic foreign recognise --name <x> --url <https://...> --keeper-key "ssh-ed25519 ..."');
+        return 0;
+      }
+      for (const r of all) {
+        const seen = witnessed(root, r.name);
+        const last = seen[seen.length - 1];
+        console.log(`  ${r.name}`);
+        console.log(`      ${r.url || '(no address)'}`);
+        console.log(`      ${last ? `witnessed to checkpoint ${last.number}, ${last.records} records, root ${String(last.root).slice(0, 16)}\u2026` : 'never witnessed'}`);
+      }
+      return 0;
+    }
+
+    if (sub === 'recognise') {
+      const name = arg('name'), url = arg('url'), key = arg('keeper-key');
+      if (!name || !key) { console.error('republic foreign recognise --name <x> --keeper-key "ssh-ed25519 ..." [--url <https://...>]'); return 2; }
+      const all = republics(root);
+      if (all.some((r) => r.name === name)) { console.error(`${name} is already recognised.`); return 1; }
+      all.push({ name, url: url || null, keeper_key: key, recognised: new Date().toISOString().slice(0, 10) });
+      writeRepublics(root, all);
+      append(root, { author: arg('by', holderOf(root, 'journal.publish')?.holder), kind: 'republic.recognised',
+        provision: 'art-05/§4/¶2', payload: { republic: name, url: url || null } });
+      console.log(`Recognised ${name}.`);
+      console.log('  This records whose key to check. It does not trust them, and confers nothing.');
+      return 0;
+    }
+
+    if (sub === 'witness') {
+      const name = arg('name'), file = arg('checkpoint');
+      if (!name || !file) { console.error('republic foreign witness --name <x> --checkpoint <file.json>'); return 2; }
+      if (!fs.existsSync(file)) { console.error(`No file at ${file}.`); return 1; }
+      let cp;
+      try { cp = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { console.error(`That is not JSON: ${e.message}`); return 1; }
+
+      const r = await checkForeign(root, name, cp);
+      if (!r.ok) {
+        console.error(`\u2717 ${r.error}`);
+        // A neighbour rewriting its history is a fact worth recording, not a
+        // silent failure — art-05/§4/¶2.
+        if (/rewritten|removed/.test(r.error)) {
+          append(root, { author: holderOf(root, 'journal.publish')?.holder, kind: 'republic.diverged',
+            provision: 'art-05/§4/¶2', payload: { republic: name, why: r.error, number: cp.number, root: cp.root } });
+          console.error('\n  Recorded. This is now part of our register, and is published.');
+        }
+        return 1;
+      }
+      if (r.already) { console.log(`Already witnessed checkpoint ${cp.number} of ${name}, and it is unchanged.`); return 0; }
+
+      append(root, { author: holderOf(root, 'journal.publish')?.holder, kind: 'republic.witnessed',
+        provision: 'art-05/§4/¶2', payload: { republic: name, number: cp.number, records: cp.records, root: cp.root, at: cp.at } });
+      console.log(`\u2713 witnessed ${name} checkpoint ${cp.number}: ${cp.records} records, root ${String(cp.root).slice(0, 16)}\u2026`);
+      console.log('  Signed by their Keeper, and following the last one we saw.');
+      return 0;
+    }
+
+    if (sub === 'history') {
+      const name = arg('name');
+      const seen = witnessed(root, name);
+      if (!seen.length) { console.log(`Nothing witnessed of ${name}.`); return 0; }
+      for (const w of seen) console.log(`  checkpoint ${String(w.number).padStart(4)}  ${String(w.records).padStart(6)} records  ${String(w.root).slice(0, 24)}\u2026`);
+      return 0;
+    }
+
+    console.error('republic foreign <list|recognise|witness|history>');
     return 2;
   },
 };

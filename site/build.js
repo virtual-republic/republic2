@@ -21,6 +21,7 @@ import { state, accounts, bookOf, matchBook, TREASURY } from '../core/value.js';
 import { closesAt } from '../core/tally.js';
 import { powersOf, electorateOf, resolutions as resolutionsOf, countResolution } from '../core/governance.js';
 import { words, Word, inUse } from '../core/vocabulary.js';
+import { deedState, recogniser } from '../core/deeds.js';
 import { diffLines, pairEdits, summarise, locate, hunks } from '../core/diff.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -478,59 +479,61 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
 
   // ---- deeds ------------------------------------------------------------------
 
-  const keeperOffice = offs.find((o) => (o.powers || []).includes('deed.recognise'));
-  const requestedDir = path.join(at(root, 'deeds'), 'requested');
-  const requested = fs.existsSync(requestedDir)
-    ? fs.readdirSync(requestedDir).filter((f) => f.endsWith('.md'))
-        .map((f) => { const [m, b] = frontmatterOf(fs.readFileSync(path.join(requestedDir, f), 'utf8')); return { ...m, body: b }; })
-    : [];
-  const pendingDeeds = requested.filter((d) => d.status === 'requested');
-  const refusedDeeds = requested.filter((d) => d.status === 'refused');
+  // Deeds are read from the ledger, not from files — so a request that was
+  // recorded appears whether or not its file made the journey. And the page
+  // fetches them live, so a new request shows up without a rebuild.
+  const D = deedState(root);
+  const keeperOffice = recogniser(root);
 
-  write('journal/deeds', page('Deeds', `
-    <h1>Deeds<span class="sub">Recognised title. A deed is valid only when the Keeper has recognised it and it is published in the Journal — art-05/§2/¶2.</span></h1>
+  fs.mkdirSync(path.join(OUT, 'data'), { recursive: true });
+  fs.writeFileSync(path.join(OUT, 'data/deeds.json'), JSON.stringify({
+    recogniser: keeperOffice,
+    deeds: D.all.map(({ body, ...d }) => d),
+  }, null, 2));
 
-    <h2>Recognised</h2>
-    ${C.deeds.length ? `<table><thead><tr><th>Deed</th><th>Kind</th><th>Held by</th><th>Transferable</th><th>Published</th></tr></thead>
-    <tbody>${C.deeds.map((d) => `<tr>
-      <td><a href="${u(`/journal/deeds/${d.id}/`)}">${esc(d.title || d.id)}</a></td>
-      <td class="q">${esc(d.kind || '')}</td><td>${esc(d.holder)}</td>
-      <td class="q">${d.transferable ? 'yes' : 'no'}</td>
-      <td class="q">${d.journal ? `<a href="${u(`/journal/issues/${d.journal}/`)}">Journal ${d.journal}</a>` : '—'}</td></tr>`).join('')}</tbody></table>`
-    : '<p class="quiet">None recognised.</p>'}
+  write('journal/deeds', page(Word(W.deeds), `
+    <h1>${esc(Word(W.deeds))}<span class="sub">Recognised title. A ${esc(W.deed)} is valid only when the ${esc(keeperOffice ? keeperOffice.title : 'Keeper')} has recognised it and it is published in the ${esc(W.journal)} — art-05/§2/¶2.</span></h1>
 
-    <h2>Requested</h2>
-    <p class="quiet">A request confers nothing. It is not a deed until the Keeper recognises it.</p>
-    ${pendingDeeds.length ? `<table><thead><tr><th>Asked for</th><th>By</th><th>For</th><th>Transferable</th></tr></thead>
-    <tbody>${pendingDeeds.map((d) => `<tr><td>${esc(d.title || d.id)}</td><td class="q">${esc(d.requested_by)}</td>
-      <td class="q">${esc(d.holder)}</td><td class="q">${d.transferable ? 'yes' : 'no'}</td></tr>`).join('')}</tbody></table>`
-    : '<p class="quiet">Nothing outstanding.</p>'}
+    <p class="state" data-loading>reading the register…</p>
 
-    ${refusedDeeds.length ? `<h2>Refused</h2>
-    <table><thead><tr><th>Asked for</th><th>Reasons</th></tr></thead>
-    <tbody>${refusedDeeds.map((d) => `<tr><td>${esc(d.title || d.id)}</td><td class="q">${esc(d.reasons || '')}</td></tr>`).join('')}</tbody></table>` : ''}
+    <div data-lists hidden>
+      <h2>Recognised</h2>
+      <table data-valid><thead><tr><th>${esc(Word(W.deed))}</th><th>Held by</th><th>Transferable</th><th>Published</th></tr></thead><tbody></tbody></table>
+      <p data-no-valid class="quiet" hidden>None recognised.</p>
 
-    <h2>Ask for a deed</h2>
+      <h2>Requested</h2>
+      <p class="quiet">A request confers nothing. It is not a ${esc(W.deed)} until it is recognised.</p>
+      <table data-pending><thead><tr><th>Asked for</th><th>By</th><th>To be held by</th><th>Transferable</th></tr></thead><tbody></tbody></table>
+      <p data-no-pending class="quiet" hidden>Nothing outstanding.</p>
+
+      <div data-refused-box hidden>
+        <h2>Refused</h2>
+        <table data-refused><thead><tr><th>Asked for</th><th>Reasons</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+
+    <h2>Ask for a ${esc(W.deed)}</h2>
     <p data-msg class="msg quiet"></p>
     <label for="dtitle">What is claimed</label><input type="text" id="dtitle" placeholder="The mill at the river">
+    <label for="did0">Identifier</label><input type="text" id="did0" placeholder="taken from the title if you leave this blank">
     <label for="dkind">Kind</label><select id="dkind">${cfg.deeds.kinds.map((k) => `<option>${esc(k)}</option>`).join('')}</select>
     <label for="dholder">To be held by</label><select id="dholder">${[...ACCT.keys()].map((x) => `<option>${esc(x)}</option>`).join('')}</select>
     <label for="dtransferable">Transferable</label>
     <select id="dtransferable"><option value="no">no — it stays where it is granted</option><option value="yes">yes — the holder may pass it on</option></select>
-    <label for="dtext">The deed itself</label><textarea id="dtext" rows="5" placeholder="¹ ..."></textarea>
+    <label for="dtext">The ${esc(W.deed)} itself</label><textarea id="dtext" rows="5" placeholder="¹ ..."></textarea>
     <div class="row"><button data-act="request" disabled>Sign the request</button></div>
 
+    <hr class="rule">
+    <h2>Recognise or refuse</h2>
+    <p data-keepermsg class="quiet">—</p>
     <div data-keeper hidden>
-      <hr class="rule">
-      <h2>Recognise or refuse</h2>
-      <p class="quiet">Yours alone — art-05/§2/¶2. Recognition publishes the deed in the Journal, which is what makes it valid.</p>
       <label for="rid">Request</label><select id="rid"></select>
       <div class="row"><button data-act="recognise">Recognise and publish</button></div>
       <label for="rreasons">Reasons for refusing</label><input type="text" id="rreasons">
       <div class="row"><button data-act="refuse" class="plain">Refuse the request</button></div>
 
       <h3>Recognise one directly</h3>
-      <p class="quiet">No request is needed. You may recognise title on your own motion.</p>
+      <p class="quiet">No request is needed. You may recognise title on your own motion — art-05/§2/¶2.</p>
       <label for="did">Identifier</label><input type="text" id="did" placeholder="river-mill">
       <label for="dtitle2">What is recognised</label><input type="text" id="dtitle2">
       <label for="dholder2">Held by</label><select id="dholder2">${[...ACCT.keys()].map((x) => `<option>${esc(x)}</option>`).join('')}</select>
@@ -541,14 +544,9 @@ ${mod ? `<script type="module" src="${u(`/js/${mod}.js`)}"></script>` : ''}
 
     <div data-out class="out" hidden></div>
     <div class="row"><a data-commit class="button" hidden>Open on GitHub</a></div>`,
-    { on: 'journal/deeds', module: 'deeds', data: {
-      kinds: cfg.deeds.kinds,
-      pending: pendingDeeds.map((d) => ({ id: d.id, title: d.title })),
-      keeper: keeperOffice ? { id: keeperOffice.id, title: keeperOffice.title, holder: keeperOffice.holder } : null,
-      accounts: [...ACCT.keys()],
-    } }));
+    { on: 'journal/deeds', module: 'deeds', data: { kinds: cfg.deeds.kinds, accounts: [...ACCT.keys()] } }));
 
-  for (const d of C.deeds) {
+  for (const d of D.valid) {
     write(`journal/deeds/${d.id}`, page(d.title || d.id, `
       <p class="crumb"><a href="${u('/journal/deeds/')}">Deeds</a> · deed.${esc(d.id)}</p>
       <h1>${esc(d.title || d.id)}<span class="sub">${esc(d.kind || 'deed')} · held by ${esc(d.holder)} · ${d.transferable ? 'transferable' : 'not transferable'} · recognised ${esc(d.recognised)}</span></h1>
