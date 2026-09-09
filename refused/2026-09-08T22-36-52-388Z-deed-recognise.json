@@ -1,0 +1,17 @@
+{
+  "kind": "deed.recognise",
+  "deed": "fursona-1",
+  "title": "A nontransferable fursona deed is hereby issued use by the Republic Co. It shall be described as follows: a black fox with green and grey stripes, a green tongue. The fursona name is Verdant. Exclusive use of this fursona is issued to Republic Co.",
+  "holder": "e-0001",
+  "transferable": false,
+  "by": "c-0001",
+  "at": "2026-09-08T22:36:52.388Z",
+  "salt": "4a52ccffcfb04dfb",
+  "signature": "-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgP75cSkD4zu2XN0RiWpZZInqtKj\noH98W2UnZexMYDkdwAAAAIcmVwdWJsaWMAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVk\nMjU1MTkAAABAd0h03cDqd25tw/wT2hoxaFdFMrPoDPwP2c4eKkTzrS8xfYrTnCprUL5r6N\nKAXOzs3Vg5Viq6MroqYKdhF0DTDg==\n-----END SSH SIGNATURE-----\n",
+  "_file": "2026-09-08T22-36-52-388Z-deed-recognise.json",
+  "_path": "/home/runner/work/republic2/republic2/acts/2026-09-08T22-36-52-388Z-deed-recognise.json",
+  "_refused": {
+    "why": "deed.fursona-1 is already recognised",
+    "at": "2026-09-09T16:16:44.734Z"
+  }
+}
