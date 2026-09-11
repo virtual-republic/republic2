@@ -1,0 +1,8 @@
+{
+  "kind": "deed.recognise",
+  "deed": "baron-of-the-bay",
+  "by": "c-0001",
+  "at": "2026-09-11T06:16:39.241Z",
+  "salt": "c1643b6db1e87138",
+  "signature": "-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgP75cSkD4zu2XN0RiWpZZInqtKj\noH98W2UnZexMYDkdwAAAAIcmVwdWJsaWMAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVk\nMjU1MTkAAABAAEBfPhyXslkVJxlZ82FEW4WPxIYUs4hX3arQx2g24xJQ+z8fWITAst1Vte\nhhmTgGvbLHZ8xCQDx6p+aTlmRdBQ==\n-----END SSH SIGNATURE-----\n"
+}
